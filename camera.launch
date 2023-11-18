@@ -1,3 +1,4 @@
+<!--  This file is not put into use now!  -->
 <launch>
     <node name="image_publisher" pkg="your_package_name" type="image_publisher.py" output="screen">
         <param name="camera_number" value="0" />

@@ -1,9 +1,9 @@
 # import gym
 import time
-
+import rospy
 from rospy import Duration
 from typing import Dict
-
+import json
 from ros_interface import *
 
 
@@ -32,7 +32,7 @@ class EdiEnv():
             if status is not None and all(v is not None for v in images.values()):
                 break
             rospy.loginfo('Something not available, Retrying...')
-
+            rospy.sleep(1)
             time.sleep(1)
         rospy.loginfo('Initialized EdiEnv.')
 
@@ -53,7 +53,7 @@ class EdiEnv():
         :param action: action
         :return: new observation, reward, completion status, and other info.
         """
-        info = self._step_with_action(action)
+        step_action_info = self._step_with_action(action)
         obs = dict()
         time_now = rospy.Time.now()
         s, images = self._obtain_obs_through_time(time_now)
@@ -66,12 +66,6 @@ class EdiEnv():
 
     def close(self):
         pass
-
-    def _get_camera_topics(self):
-        all_topics = rospy.get_published_topics()
-        camera_topics = [topic for topic, _ in all_topics if topic.startswith('/camera')]
-        rospy.loginfo(f"Obtain Camera topics: {str(camera_topics)}")
-        return camera_topics
 
     def _obtain_obs_through_time(self, timestamp, time_interval=0.2) -> (Dict, Dict):
         duration = Duration(time_interval)
@@ -95,19 +89,24 @@ class EdiEnv():
 
         return status, images
 
-    def _fetch_img_from_msg(self, cached_messages):
+    @staticmethod
+    def _get_camera_topics():
+        all_topics = rospy.get_published_topics()
+        camera_topics = [topic for topic, _ in all_topics if topic.startswith('/camera')]
+        rospy.loginfo(f"Obtain Camera topics: {str(camera_topics)}")
+        return camera_topics
+
+    @staticmethod
+    def _fetch_img_from_msg(cached_messages):
         if not len(cached_messages) > 0:
             rospy.logwarn(f"Img cached_messages is empty")
             return None
-        cached_datas = [msg.data for msg in cached_messages]
         img_msg = cached_messages[-1]
-        try:
-            img = cv_bridge.imgmsg_to_cv2(img_msg, "bgr8")
-        except:
-            img = None
+        img = cv_bridge.imgmsg_to_cv2(img_msg, "bgr8")
         return img
 
-    def _fetch_status_from_msg(self, cached_messages):
+    @staticmethod
+    def _fetch_status_from_msg(cached_messages):
         if not len(cached_messages) > 0:
             rospy.logwarn(f"Status cached_messages is empty")
             return None
@@ -121,8 +120,8 @@ class EdiEnv():
         return status
 
     def _step_with_action(self, action):
-        info = {}
-        return info
+        step_action_info = {}
+        return step_action_info
 
 
 env = EdiEnv()
