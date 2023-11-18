@@ -1,10 +1,16 @@
-# import gym
-import time
-import rospy
-from rospy import Duration
+import traceback
+try:
+    import rospy
+    from rospy import Duration
+    from edi_env_ros_interface import *
+except:
+    traceback.print_exc()
+    print("Error on importing rospy...")
+    print("You can still test other unrelated functions...")
 from typing import Dict
 import json
-from edi_env_ros_interface import *
+import time
+# import gym
 
 
 # class EdiEnv(gym.Env):
@@ -36,7 +42,7 @@ class EdiEnv():
         :param action: action
         :return: new observation, reward, completion status, and other info.
         """
-        step_action_info = self._step_with_action(action)
+        step_action_info = self.step_with_action(action)
         obs = dict()
         time_now = rospy.Time.now()
         s, images = self._obtain_obs_through_time(time_now)
@@ -121,13 +127,21 @@ class EdiEnv():
             return None
         return status
 
-    def _step_with_action(self, action):
+    @classmethod
+    def step_with_action(cls, action):
         # TODO: Realworld Arm Control
         step_action_info = {}
         return step_action_info
 
 
-env = EdiEnv()
-while not rospy.is_shutdown():
-    print(env.reset()["images"])
-    time.sleep(3)
+# ---- Test env basics ----
+# env = EdiEnv()
+# while not rospy.is_shutdown():
+#     print(env.reset()["images"])
+#     time.sleep(3)
+
+# ---- Test env.step_with_action ----
+action = None
+EdiEnv.step_with_action(action)
+
+
