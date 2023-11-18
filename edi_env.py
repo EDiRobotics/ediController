@@ -4,7 +4,7 @@ import rospy
 from rospy import Duration
 from typing import Dict
 import json
-from ros_interface import *
+from edi_env_ros_interface import *
 
 
 # class EdiEnv(gym.Env):
@@ -16,24 +16,7 @@ class EdiEnv():
         self.image_topics = self._get_camera_topics()
 
         start_listening(self.image_topics)
-        while not rospy.is_shutdown():
-            time_now = rospy.Time.now()
-            status, images = self._obtain_obs_through_time(time_now)
-
-            if status is not None:
-                self.last_status = status
-
-            for k, v in images.items():
-                if v is not None:
-                    self.last_images[k] = v
-
-            rospy.loginfo('Checking Availability.')
-
-            if status is not None and all(v is not None for v in images.values()):
-                break
-            rospy.loginfo('Something not available, Retrying...')
-            rospy.sleep(1)
-            time.sleep(1)
+        self._wait_until_ready()
         rospy.loginfo('Initialized EdiEnv.')
 
     def reset(self):
@@ -89,6 +72,25 @@ class EdiEnv():
 
         return status, images
 
+    def _wait_until_ready(self):
+        while not rospy.is_shutdown():
+            time_now = rospy.Time.now()
+            status, images = self._obtain_obs_through_time(time_now)
+
+            if status is not None:
+                self.last_status = status
+
+            for k, v in images.items():
+                if v is not None:
+                    self.last_images[k] = v
+
+            rospy.loginfo('Checking Availability.')
+
+            if status is not None and all(v is not None for v in images.values()):
+                break
+            rospy.loginfo('Something not available, Retrying...')
+            rospy.sleep(1)
+
     @staticmethod
     def _get_camera_topics():
         all_topics = rospy.get_published_topics()
@@ -120,6 +122,7 @@ class EdiEnv():
         return status
 
     def _step_with_action(self, action):
+        # TODO: Realworld Arm Control
         step_action_info = {}
         return step_action_info
 
