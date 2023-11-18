@@ -1,7 +1,5 @@
 import traceback
 try:
-    import rospy
-    from rospy import Duration
     from edi_env_ros_interface import *
 except:
     traceback.print_exc()
@@ -10,6 +8,8 @@ except:
 from typing import Dict
 import json
 import time
+
+
 # import gym
 
 
@@ -153,16 +153,3 @@ class EdiEnv():
         # TODO: Realworld Arm Control
         step_action_info = {}
         return step_action_info
-
-
-# ---- Test env basics ----
-# env = EdiEnv()
-# while not rospy.is_shutdown():
-#     print(env.reset()["images"])
-#     time.sleep(3)
-
-# ---- Test env.step_with_action ----
-action = None
-EdiEnv.step_with_action(action)
-
-
