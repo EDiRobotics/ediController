@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import rospy
+import std_msgs.msg
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
@@ -13,8 +14,11 @@ class ImagePublisher:
         self.port = rospy.get_param('~port', '8080')
         self.camera_type = rospy.get_param('~camera_type', 'usb')
         self.bridge = CvBridge()
+        self.camera_name = None
         if self.camera_type == "usb":
-            self.pub = rospy.Publisher(f'/camera_{self.camera_type}_{self.camera_number}/image_raw', Image, queue_size=10)
+            self.camera_name = f"camera_{self.camera_type}_{self.camera_number}"
+            self.pub = rospy.Publisher(f'/{self.camera_name}/image_raw', Image,
+                                       queue_size=10)
             self.cap_usb = cv2.VideoCapture(self.camera_number)
 
     def start(self):
@@ -25,8 +29,11 @@ class ImagePublisher:
         while not rospy.is_shutdown():
             ret, frame = self.cap_usb.read()
             if ret:
+                header = std_msgs.msg.Header()
+                header.stamp = rospy.Time.now()
+                header.frame_id = self.camera_name
                 try:
-                    ros_image = self.bridge.cv2_to_imgmsg(frame, "bgr8")
+                    ros_image = self.bridge.cv2_to_imgmsg(frame, "bgr8", header=header)
                     self.pub.publish(ros_image)
                 except Exception as e:
                     print(e)

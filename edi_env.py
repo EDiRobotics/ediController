@@ -1,4 +1,6 @@
 # import gym
+import time
+
 from rospy import Duration
 from typing import Dict
 
@@ -11,6 +13,9 @@ class EdiEnv():
         super(EdiEnv, self).__init__()
         self.last_status = None
         self.last_images = {}
+        self.image_topics = self._get_camera_topics()
+
+        start_listening(self.image_topics)
         while not rospy.is_shutdown():
             time_now = rospy.Time.now()
             status, images = self._obtain_obs_through_time(time_now)
@@ -22,9 +27,14 @@ class EdiEnv():
                 if v is not None:
                     self.last_images[k] = v
 
+            rospy.loginfo('Checking Availability.')
+
             if status is not None and all(v is not None for v in images.values()):
                 break
-        print('Init finished')
+            rospy.loginfo('Something not available, Retrying...')
+
+            time.sleep(1)
+        rospy.loginfo('Initialized EdiEnv.')
 
     def reset(self):
         """
@@ -51,11 +61,17 @@ class EdiEnv():
         obs["images"] = images
         reward = 0.0
         done = False
-        info = {}
+        info = {"timestamp": time_now.to_time()}
         return obs, reward, done, info
 
     def close(self):
         pass
+
+    def _get_camera_topics(self):
+        all_topics = rospy.get_published_topics()
+        camera_topics = [topic for topic, _ in all_topics if topic.startswith('/camera')]
+        rospy.loginfo(f"Obtain Camera topics: {str(camera_topics)}")
+        return camera_topics
 
     def _obtain_obs_through_time(self, timestamp, time_interval=0.2) -> (Dict, Dict):
         duration = Duration(time_interval)
@@ -76,6 +92,7 @@ class EdiEnv():
                 img = self.last_images[k]
             images[k] = img
             self.last_images[k] = img
+
         return status, images
 
     def _fetch_img_from_msg(self, cached_messages):
@@ -92,7 +109,7 @@ class EdiEnv():
 
     def _fetch_status_from_msg(self, cached_messages):
         if not len(cached_messages) > 0:
-            rospy.logwarn(f"Img cached_messages is empty")
+            rospy.logwarn(f"Status cached_messages is empty")
             return None
         cached_datas = [msg.data for msg in cached_messages]
         status_data = cached_datas[-1]
@@ -110,4 +127,5 @@ class EdiEnv():
 
 env = EdiEnv()
 while not rospy.is_shutdown():
-    print(env.reset())
+    print(env.reset()["images"])
+    time.sleep(3)
