@@ -27,7 +27,15 @@ class EdiEnv():
 
     def reset(self):
         """
-        Resets the environment to its initial state and returns the initial observation.
+        Resets the environment and returns the initial observation.
+
+        Returns:
+          obs (dict): The initial observation after reset.
+            - obs["status"] (dict): The initial status data.
+              Contains sensor readings, system state, etc.
+            - obs["images"] (dict): The initial image data.
+              The keys are camera names (str).
+              The values are OpenCV images (np.ndarray) from each camera.
         """
         obs = dict()
         time_now = rospy.Time.now()
@@ -38,9 +46,22 @@ class EdiEnv():
 
     def step(self, action):
         """
-        Executes a step in the environment by applying an action.
-        :param action: action
-        :return: new observation, reward, completion status, and other info.
+        Performs one step in the environment by applying an action.
+
+        Args:
+          action: The action to apply.
+
+        Returns:
+          obs (dict): The observation after taking the action.
+            - obs["status"] (dict): The status data after the step.
+              Contains sensor readings, system state, etc.
+            - obs["images"] (dict): The image data after the step.
+              The keys are camera names (str).
+              The values are OpenCV images (np.ndarray) from each camera.
+          reward (float): The reward from taking the action.
+          done (bool): True if the episode has ended, False otherwise.
+          info (dict): Debugging info.
+            - info["timestamp"] (float): Timestamp of the step.
         """
         step_action_info = self.step_with_action(action)
         obs = dict()
