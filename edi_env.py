@@ -1,4 +1,6 @@
 import traceback
+import sys
+sys.path.append(".")
 try:
     from edi_env_ros_interface import *
 except:
