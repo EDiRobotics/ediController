@@ -1,6 +1,9 @@
 import traceback
 import sys
-sys.path.append(".")
+
+import numpy as np
+
+sys.path.append("..")
 try:
     from edi_env_ros_interface import *
 except:
@@ -10,6 +13,7 @@ except:
 from typing import Dict
 import json
 import time
+from edi_fr5 import fr5, FR5
 
 
 # import gym
@@ -152,6 +156,19 @@ class EdiEnv():
 
     @classmethod
     def step_with_action(cls, action):
-        # TODO: Realworld Arm Control
+        """
+        :param action: 7 length list. The first 6 item contain the 6 joint angle,
+        the last item contains the gripper proportion.
+        :return: a dict containing some information
+        """
+        if isinstance(action, np.ndarray):
+            action = action.tolist()
+        joint = action[:6]
+        gripper = action[-1]
+        robot_controller.move_joint(joint)
+        robot_controller.set_gripper(gripper)
         step_action_info = {}
         return step_action_info
+
+
+robot_controller = fr5()

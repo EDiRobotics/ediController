@@ -10,16 +10,21 @@ class ImagePublisher:
     def __init__(self):
         rospy.init_node('image_publisher', anonymous=True)
         self.camera_number = rospy.get_param('~camera_number', 0)
-        self.ip = rospy.get_param('~ip', 'localhost')
-        self.port = rospy.get_param('~port', '8080')
+        # self.ip = rospy.get_param('~ip', 'localhost')
+        # self.port = rospy.get_param('~port', '8080')
         self.camera_type = rospy.get_param('~camera_type', 'usb')
         self.bridge = CvBridge()
         self.camera_name = None
         if self.camera_type == "usb":
+            self.cap_usb = cv2.VideoCapture(self.camera_number)
+            if not self.cap_usb.isOpened():
+                rospy.logerr(f"Error opening camera with id {self.camera_number}, exiting this camera node.")
+                exit()
+            rospy.logerr(f"Launch camera node with id {self.camera_number}...")
+
             self.camera_name = f"camera_{self.camera_type}_{self.camera_number}"
             self.pub = rospy.Publisher(f'/{self.camera_name}/image_raw', Image,
                                        queue_size=10)
-            self.cap_usb = cv2.VideoCapture(self.camera_number)
 
     def start(self):
         if self.camera_type == "usb":

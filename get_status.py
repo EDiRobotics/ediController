@@ -109,7 +109,15 @@ def getStatus():
     # 20001
     # 8083 # 维护模式 frrts2021 机器人状态采样周期 10ms
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect((FR_HOST, 20001))  # STATUS_PORT
+    s.settimeout(5)
+    STATUS_PORT = 20001
+    try:
+        s.connect((FR_HOST, STATUS_PORT))
+        s.settimeout(None)
+    except socket.timeout:
+        rospy.logerr(f"Connect to arm status port {STATUS_PORT} timeout, exiting...")
+        rospy.logerr(f"You may need to restart the power...")
+        exit(1)
     idx = 0
     while True:
         all = s.recv(221)  # 100ms?
@@ -124,7 +132,6 @@ def getStatus():
         json_data = json.dumps(d)
         publisher.publish(json_data)
         idx += 1
-
 
 
 while True:
