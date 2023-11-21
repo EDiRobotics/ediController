@@ -33,7 +33,7 @@ class FR5:
         gripper_pose = [0.0, 0.0, float(gripper_length), 0.0, 0.0, 0.0]
         self.robot.SetToolCoord(0, default_pose, 0, 0)
         self.robot.SetToolCoord(1, gripper_pose, 0, 0)
-        self.move_end([600, 0, 200, -180, 0, 90])
+        self.move_end([600, 0, 300, -180, 0, 90])
         self.close_gripper()
         print(f'\033[37m[__init__]: Robot initialized. \033[0m')
 

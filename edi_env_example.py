@@ -2,6 +2,9 @@ from edi_gym.edi_env import EdiEnv
 import time
 
 # ---- Test env basics ----
+# """
+# Only available when rospy is found.
+# """
 # env = EdiEnv()
 # for i in range(5):
 #     print(env.reset()["images"])

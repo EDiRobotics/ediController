@@ -18,9 +18,9 @@ class ImagePublisher:
         if self.camera_type == "usb":
             self.cap_usb = cv2.VideoCapture(self.camera_number)
             if not self.cap_usb.isOpened():
-                rospy.logerr(f"Error opening camera with id {self.camera_number}, exiting this camera node.")
+                rospy.logwarn(f"Error opening camera with id {self.camera_number}, exiting this camera node.")
                 exit()
-            rospy.logerr(f"Launch camera node with id {self.camera_number}...")
+            rospy.logwarn(f"Launch camera node with id {self.camera_number}...")
 
             self.camera_name = f"camera_{self.camera_type}_{self.camera_number}"
             self.pub = rospy.Publisher(f'/{self.camera_name}/image_raw', Image,
