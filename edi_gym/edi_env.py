@@ -5,7 +5,7 @@ import numpy as np
 
 sys.path.append("..")
 try:
-    from edi_env_ros_interface import *
+    from .edi_env_ros_interface import *
 except:
     traceback.print_exc()
     print("Error on importing rospy...")
@@ -13,7 +13,7 @@ except:
 from typing import Dict
 import json
 import time
-from edi_fr5 import fr5, FR5
+from .edi_fr5 import fr5
 
 
 # import gym

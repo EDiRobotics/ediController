@@ -41,7 +41,7 @@ class FR5:
             gripper_pos = EF_Joint
             self.robot.SetToolAO(0, float(gripper_pos), 1)
         except Exception as e:
-            print(f"Gripper Set&Get: ", e)
+            print(f"[_gripper_ctr] An error occurs:", e)
 
     def open_gripper(self):
         self._gripper_ctr(800)
@@ -53,29 +53,23 @@ class FR5:
         if 0 <= p <= 1000:
             self._gripper_ctr(p)
         else:
-            print(f"Gripper control angle {p} is not valid")
+            print(f"[set_gripper] Gripper control angle {p} is not valid")
 
     def move_end(self, pose):
         pose = [float(x) for x in pose]
         if pose[2] < 180:
-            print(f"[Env] robot z value {pose[2]} is dangerous!")
+            print(f"[move_end] Robot z value {pose[2]} is dangerous!")
             pose[2] = 200.0
         self.robot.MoveCart(pose, 1, 0, 100.0, 100.0, 100.0, -1.0, -1)
 
     def move_joint(self, joint):
         if len(joint) != 6:
-            print(f"[move_joint] joint is {joint} which is invalid")
+            print(f"[move_joint] joint is {joint} which has invalid length")
             return
         try:
             self.robot.ServoJ(joint, 0.0, 0.0, 0.008, 0.0, 0.0)
         except Exception as e:
-            print(f"action_loop: ", e)
-
-
-def __getattr__(self, name):
-    # Check if the method exists in self.robot
-    if hasattr(self.robot, name):
-        return getattr(self.robot, name)
+            print(f"[move_joint] An error occurs: ", e)
 
 
 def fr5():
