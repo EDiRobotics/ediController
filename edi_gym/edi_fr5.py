@@ -68,7 +68,12 @@ class FR5:
             print(f"[move_joint] joint is {joint} which has invalid length")
             return
         try:
-            self.robot.ServoJ(joint, 0.0, 0.0, 0.008, 0.0, 0.0)
+            J1 = joint
+            P1 = _robot.GetForwardKin(J1)[1:]
+            eP1 = [0.000, 0.000, 0.000, 0.000]
+            dP1 = [1.000, 1.000, 1.000, 1.000, 1.000, 1.000]
+            _robot.MoveJ(J1, P1, 1, 0, 100.0, 180.0, 100.0, eP1, -1.0, 0, dP1)
+
         except Exception as e:
             print(f"[move_joint] An error occurs: ", e)
 
@@ -81,8 +86,3 @@ def fr5():
         exit("Can not connect to robot!")
     return myRobot
     # raise NotImplementedError
-
-
-if __name__ == "__main__":
-    myRobot = fr5()
-    myRobot.close_gripper()
