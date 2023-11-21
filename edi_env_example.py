@@ -10,7 +10,7 @@ import time
 # ---- Test env.step_with_action ----
 while True:
     # TODO: Assign Joint Values
-    # joint = []
+    joint = [23.0, -113.0, -102.0, -54.0, 90.0, -170.0]
     angle = 500
     action = joint + [angle]
     EdiEnv.step_with_action(action)

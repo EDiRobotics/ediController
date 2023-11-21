@@ -1,18 +1,19 @@
 import traceback
 import sys
-
-import numpy as np
+import time
 
 sys.path.append("..")
 try:
     from .edi_env_ros_interface import *
 except:
     traceback.print_exc()
+    time.sleep(1)
     print("Error on importing rospy...")
     print("You can still test other unrelated functions...")
 from typing import Dict
 import json
-import time
+import numpy as np
+
 from .edi_fr5 import fr5
 
 
@@ -163,6 +164,7 @@ class EdiEnv():
         """
         if isinstance(action, np.ndarray):
             action = action.tolist()
+        action = [float(a) for a in action]
         joint = action[:6]
         gripper = action[-1]
         robot_controller.move_joint(joint)

@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 from ctypes import cdll
 
 # Get the directory containing this script
@@ -22,10 +23,9 @@ _robot = frrpc.RPC('192.168.1.10')
 
 class FR5:
 
-    def __init__(self, robot, gripper):
+    def __init__(self, robot):
         self.robot = robot
-        self.gripper = gripper
-        print(f'\033[37m[Env]: Robot initializing.. \033[0m')
+        print(f'\033[37m[__init__]: Robot initializing.. \033[0m')
         # gripper 14 cm
         gripper_length = 13.0
         # TODO: default_pose not as expected
@@ -35,6 +35,7 @@ class FR5:
         self.robot.SetToolCoord(1, gripper_pose, 0, 0)
         self.move_end([600, 0, 200, -180, 0, 90])
         self.close_gripper()
+        print(f'\033[37m[__init__]: Robot initialized. \033[0m')
 
     def _gripper_ctr(self, EF_Joint):
         try:
@@ -73,10 +74,10 @@ class FR5:
 
 
 def fr5():
+    myRobot = None
     try:
-        myRobot = FR5(_robot, None)
+        myRobot = FR5(_robot)
     except:
-        myRobot = None
         exit("Can not connect to robot!")
     return myRobot
     # raise NotImplementedError
