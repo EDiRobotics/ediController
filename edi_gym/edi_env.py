@@ -26,6 +26,10 @@ class EdiEnv():
 
     def __init__(self) -> None:
         super(EdiEnv, self).__init__()
+
+        self.gripper_pos = 100
+        robot_controller.set_gripper(self.gripper_pos)
+
         self.last_status = None
         self.last_images = {}
         self.image_topics = self._get_camera_topics()
@@ -33,8 +37,6 @@ class EdiEnv():
         start_listening(self.image_topics)
         self._wait_until_ready()
 
-        self.gripper_pos = 100
-        robot_controller.set_gripper(self.gripper_pos)
 
         rospy.loginfo('Initialized EdiEnv.')
 
