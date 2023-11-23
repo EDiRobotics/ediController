@@ -10,7 +10,7 @@ except:
     time.sleep(1)
     print("Error on importing rospy...")
     print("You can still test other unrelated functions...")
-from typing import Dict
+from typing import Dict, List
 import json
 import numpy as np
 
@@ -22,6 +22,8 @@ from .edi_fr5 import fr5
 
 # class EdiEnv(gym.Env):
 class EdiEnv():
+    _action_chunk = False
+
     def __init__(self) -> None:
         super(EdiEnv, self).__init__()
         self.last_status = None
@@ -30,6 +32,10 @@ class EdiEnv():
 
         start_listening(self.image_topics)
         self._wait_until_ready()
+
+        self.gripper_pos = 100
+        robot_controller.set_gripper(self.gripper_pos)
+
         rospy.loginfo('Initialized EdiEnv.')
 
     def reset(self):
@@ -70,6 +76,9 @@ class EdiEnv():
           info (dict): Debugging info.
             - info["timestamp"] (float): Timestamp of the step.
         """
+        if isinstance(action, np.ndarray):
+            action = action.tolist()
+        self.gripper_pos = action[-1]
         step_action_info = self.step_with_action(action)
         obs = dict()
         time_now = rospy.Time.now()
@@ -103,6 +112,8 @@ class EdiEnv():
                 img = self.last_images[k]
             images[k] = img
             self.last_images[k] = img
+        if isinstance(status, dict):
+            status["gripper_pos"] = self.gripper_pos
 
         return status, images
 
@@ -156,14 +167,13 @@ class EdiEnv():
         return status
 
     @classmethod
-    def step_with_action(cls, action):
+    def step_with_action(cls, action: List):
         """
         :param action: 7 length list. The first 6 item contain the 6 joint angle,
         the last item contains the gripper proportion.
         :return: a dict containing some information
         """
-        if isinstance(action, np.ndarray):
-            action = action.tolist()
+        # action = cls._action_chunk(action)
         action = [float(a) for a in action]
         joint = action[:6]
         gripper = action[-1]
@@ -171,6 +181,17 @@ class EdiEnv():
         robot_controller.set_gripper(gripper)
         step_action_info = {}
         return step_action_info
+
+    @classmethod
+    def _action_chunk(cls, action: List):
+        """
+        :param action: 7 length list. The first 6 item contain the 6 joint angle,
+        the last item contains the gripper proportion.
+        :return: a dict containing some information
+        """
+        joint = action[:6]
+        gripper = action[-1:]
+        return joint + gripper
 
 
 robot_controller = fr5()
