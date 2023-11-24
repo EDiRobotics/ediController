@@ -12,13 +12,13 @@ roscore &
 
 sleep 3
 camera_numbers=$(ls /dev/video* | sed 's/[^0-9]*//g')
-echo "Starting obtain camera images..."
+echo "Starting to obtain camera images, cameras $(echo $camera_numbers | tr '\n' ' ') are detected..."
 for camera_number in $camera_numbers
 do
     /usr/bin/python3 get_images.py _camera_number:=$camera_number &
 done
 
-echo "Starting obtain arm status..."
+echo "Starting to obtain arm status..."
 /usr/bin/python3 get_status.py &
 
 wait

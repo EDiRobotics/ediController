@@ -181,7 +181,9 @@ class EdiEnv():
         gripper = action[-1]
         robot_controller.move_joint(joint)
         robot_controller.set_gripper(gripper)
-        step_action_info = {}
+        error = robot_controller.detect_errors()
+        step_action_info = dict()
+        step_action_info["error"] = error
         return step_action_info
 
     @classmethod

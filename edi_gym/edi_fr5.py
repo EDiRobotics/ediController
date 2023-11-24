@@ -2,6 +2,9 @@ import os
 import sys
 import time
 from ctypes import cdll
+from typing import Dict
+
+from .errors import robot_errors
 
 # Get the directory containing this script
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -76,6 +79,11 @@ class FR5:
 
         except Exception as e:
             print(f"[move_joint] An error occurs: ", e)
+
+    def detect_errors(self) -> Dict:
+        ret = _robot.GetRobotErrorCode()
+        error_msg = robot_errors[ret]
+        return {ret: error_msg}
 
 
 def fr5():
