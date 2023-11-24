@@ -118,6 +118,7 @@ def getStatus():
         rospy.logerr(f"Connect to arm status port {STATUS_PORT} timeout, exiting...")
         rospy.logerr(f"You may need to restart the robot arm...")
         exit(1)
+    rospy.loginfo(f"Launch arm status node...")
     idx = 0
     while not rospy.is_shutdown():
         all = s.recv(221)  # 100ms?
