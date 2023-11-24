@@ -134,6 +134,5 @@ def getStatus():
         publisher.publish(json_data)
         idx += 1
 
-
-while True:
+while not rospy.is_shutdown():
     getStatus()
