@@ -2,8 +2,7 @@ import os
 import sys
 import time
 from ctypes import cdll
-from typing import Dict
-
+from typing import Dict, List, Tuple
 from .errors import robot_errors
 
 # Get the directory containing this script
@@ -80,10 +79,11 @@ class FR5:
         except Exception as e:
             print(f"[move_joint] An error occurs: ", e)
 
-    def detect_errors(self) -> Dict:
-        ret = _robot.GetRobotErrorCode()
-        error_msg = robot_errors[ret]
-        return {ret: error_msg}
+    def detect_errors(self) -> Tuple[int, List[Dict[int, str]]]:
+        rets = _robot.GetRobotErrorCode()
+        errors = [{ret: robot_errors[ret]} for ret in rets]
+        e = 0 if all(ret == 0 for ret in rets) else 1
+        return e, errors
 
     def clear_errors(self):
         _robot.ResetAllError()
@@ -97,3 +97,6 @@ def fr5():
         exit("Can not connect to robot!")
     return myRobot
     # raise NotImplementedError
+
+if __name__ == "__main__":
+    _robot

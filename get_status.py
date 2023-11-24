@@ -119,7 +119,7 @@ def getStatus():
         rospy.logerr(f"You may need to restart the robot arm...")
         exit(1)
     idx = 0
-    while True:
+    while not rospy.is_shutdown():
         all = s.recv(221)  # 100ms?
         data = all[0:221]
         try:
