@@ -81,7 +81,7 @@ class FR5:
 
     def detect_errors(self) -> Tuple[int, List[Dict[int, str]]]:
         rets = _robot.GetRobotErrorCode()
-        errors = [{ret: robot_errors[ret]} for ret in rets]
+        errors = [{ret: robot_errors[str(ret)]} for ret in rets]
         e = 0 if all(ret == 0 for ret in rets) else 1
         return e, errors
 
