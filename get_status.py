@@ -116,7 +116,7 @@ def getStatus():
         s.settimeout(None)
     except socket.timeout:
         rospy.logerr(f"Connect to arm status port {STATUS_PORT} timeout, exiting...")
-        rospy.logerr(f"You may need to restart the power...")
+        rospy.logerr(f"You may need to restart the robot arm...")
         exit(1)
     idx = 0
     while True:
