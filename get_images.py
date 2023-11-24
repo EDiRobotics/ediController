@@ -20,7 +20,7 @@ class ImagePublisher:
             if not self.cap_usb.isOpened():
                 rospy.logwarn(f"Error opening camera with id {self.camera_number}, exiting this camera node.")
                 exit()
-            rospy.logwarn(f"Launch camera node with id {self.camera_number}...")
+            rospy.loginfo(f"Launch camera node with id {self.camera_number}...")
 
             self.camera_name = f"camera_{self.camera_type}_{self.camera_number}"
             self.pub = rospy.Publisher(f'/{self.camera_name}/image_raw', Image,
