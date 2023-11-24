@@ -1,9 +1,0 @@
-<!--  This file is not put into use now!  -->
-<launch>
-    <node name="image_publisher" pkg="your_package_name" type="image_publisher.py" output="screen">
-        <param name="camera_number" value="0" />
-        <param name="ip" value="192.168.1.2" />
-        <param name="port" value="8080" />
-        <param name="camera_type" value="usb" />
-    </node>
-</launch>
