@@ -53,6 +53,7 @@ class EdiEnv():
               The values are OpenCV images (np.ndarray) from each camera.
         """
         obs = dict()
+        robot_controller.clear_errors()
         time_now = rospy.Time.now()
         s, images = self._obtain_obs_through_time(time_now)
         obs["status"] = s
@@ -90,6 +91,7 @@ class EdiEnv():
         reward = 0.0
         done = False
         info = {"timestamp": time_now.to_time()}
+        info.update(step_action_info)
         return obs, reward, done, info
 
     def close(self):

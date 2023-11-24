@@ -85,6 +85,9 @@ class FR5:
         error_msg = robot_errors[ret]
         return {ret: error_msg}
 
+    def clear_errors(self):
+        _robot.ResetAllError()
+
 
 def fr5():
     myRobot = None
