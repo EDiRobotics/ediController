@@ -78,6 +78,8 @@ class EdiEnv():
           done (bool): True if the episode has ended, False otherwise.
           info (dict): Debugging info.
             - info["timestamp"] (float): Timestamp of the step.
+            - info["error"] int: If error occurs.
+            - info["error_details"] list: The first three items are obtained from GetRobotErrorCode().
         """
         if isinstance(action, np.ndarray):
             action = action.tolist()
@@ -181,12 +183,17 @@ class EdiEnv():
         action = [float(a) for a in action]
         joint = action[:6]
         gripper = action[-1]
-        robot_controller.move_joint(joint)
-        robot_controller.set_gripper(gripper)
-        err, error = robot_controller.detect_errors()
+        retJ = robot_controller.move_joint(joint)
+        retG = robot_controller.set_gripper(gripper)
+        err, errors = robot_controller.detect_errors()
+
+        err = int(err or retJ or retG)
+        errors.append(robot_controller.lookup_error(retJ))
+        errors.append(robot_controller.lookup_error(retG))
+
         step_action_info = dict()
         step_action_info["error"] = err
-        step_action_info["error_details"] = error
+        step_action_info["error_details"] = errors
         return step_action_info
 
     @classmethod

@@ -3,7 +3,11 @@ import sys
 import time
 from ctypes import cdll
 from typing import Dict, List, Tuple
-from .errors import robot_errors
+try:
+    from .errors import robot_errors
+except:
+    sys.path.append(".")
+    from errors import robot_errors
 
 # Get the directory containing this script
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -42,51 +46,55 @@ class FR5:
     def _gripper_ctr(self, EF_Joint):
         try:
             gripper_pos = EF_Joint
-            self.robot.SetToolAO(0, float(gripper_pos), 1)
+            return self.robot.SetToolAO(0, float(gripper_pos), 1)
         except Exception as e:
             print(f"[_gripper_ctr] An error occurs:", e)
 
     def open_gripper(self):
-        self._gripper_ctr(800)
+        return self._gripper_ctr(800)
 
     def close_gripper(self):
-        self._gripper_ctr(100)
+        return self._gripper_ctr(100)
 
     def set_gripper(self, p):
         if 0 <= p <= 1000:
-            self._gripper_ctr(p)
+            return self._gripper_ctr(p)
         else:
             print(f"[set_gripper] Gripper control angle {p} is not valid")
+            return 4
 
     def move_end(self, pose):
         pose = [float(x) for x in pose]
         if pose[2] < 180:
             print(f"[move_end] Robot z value {pose[2]} is dangerous!")
             pose[2] = 200.0
-        self.robot.MoveCart(pose, 1, 0, 100.0, 100.0, 100.0, -1.0, -1)
+        return self.robot.MoveCart(pose, 1, 0, 100.0, 100.0, 100.0, -1.0, -1)
 
     def move_joint(self, joint):
         if len(joint) != 6:
             print(f"[move_joint] joint is {joint} which has invalid length")
-            return
+            return 3
         try:
             J1 = joint
-            P1 = _robot.GetForwardKin(J1)[1:]
+            P1 = self.robot.GetForwardKin(J1)[1:]
             eP1 = [0.000, 0.000, 0.000, 0.000]
             dP1 = [1.000, 1.000, 1.000, 1.000, 1.000, 1.000]
-            _robot.MoveJ(J1, P1, 1, 0, 100.0, 180.0, 100.0, eP1, -1.0, 0, dP1)
+            return self.robot.MoveJ(J1, P1, 1, 0, 100.0, 180.0, 100.0, eP1, -1.0, 0, dP1)
 
         except Exception as e:
             print(f"[move_joint] An error occurs: ", e)
 
     def detect_errors(self) -> Tuple[int, List[Dict[int, str]]]:
-        rets = _robot.GetRobotErrorCode()
+        rets = self.robot.GetRobotErrorCode()
         errors = [{ret: robot_errors[str(ret)]} for ret in rets]
         e = 0 if all(ret == 0 for ret in rets) else 1
         return e, errors
 
+    def lookup_error(self, ret):
+        return {ret: robot_errors[str(ret)]}
+
     def clear_errors(self):
-        _robot.ResetAllError()
+        return self.robot.ResetAllError()
 
 
 def fr5():
@@ -99,4 +107,4 @@ def fr5():
     # raise NotImplementedError
 
 if __name__ == "__main__":
-    _robot
+    robot = fr5()
