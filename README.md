@@ -40,3 +40,8 @@ To run a test example:
 cd ediControler
 python edi_env_example.py
 ```
+
+CUDA="--gpus all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility -e NVIDIA_VISIBLE_DEVICES=all "
+sudo docker run -it --rm --net=host --shm-size 32G \
+-v /home/radiance/ediControler:/workspace/ediControler \
+$CUDA edi/ros ldconfig

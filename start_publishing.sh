@@ -21,4 +21,7 @@ done
 echo "Starting to obtain arm status..."
 /usr/bin/python3 get_status.py &
 
+echo "Starting Sim Environment..."
+/usr/bin/python3 sim_env.py &
+
 wait
