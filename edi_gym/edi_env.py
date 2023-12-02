@@ -37,7 +37,6 @@ class EdiEnv():
         start_listening(self.image_topics)
         self._wait_until_ready()
 
-
         rospy.loginfo('Initialized EdiEnv.')
 
     def reset(self):
@@ -183,6 +182,10 @@ class EdiEnv():
         action = [float(a) for a in action]
         joint = action[:6]
         gripper = action[-1]
+        # sim env step
+        publish_action(action)
+
+        # real env step
         retJ = robot_controller.move_joint(joint)
         retG = robot_controller.set_gripper(gripper)
         err, errors = robot_controller.detect_errors()
