@@ -5,6 +5,13 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
 
+"""
+https://www.coder.work/article/4970830
+OpenCV 自动选择第一个可用的捕获后端 (see here) 。可能是它没有自动使用 V4L2。
+构建时还要设置 -D WITH_V4L=ON 和 -D WITH_LIBV4L=ON。
+为了设置要使用的像素格式，请设置捕获的 CAP_PROP_FOURCC 属性:
+"""
+
 
 class ImagePublisher:
     def __init__(self):
