@@ -5,9 +5,11 @@ import time
 sys.path.append("..")
 try:
     from .edi_env_ros_interface import *
+    rospy_enable = True
 except:
     traceback.print_exc()
     time.sleep(1)
+    rospy_enable = False
     print("Error on importing rospy...")
     print("You can still test other unrelated functions...")
 from typing import Dict, List
@@ -190,7 +192,13 @@ class EdiEnv():
         retG = robot_controller.set_gripper(gripper)
         err, errors = robot_controller.detect_errors()
 
-        err = int(err or retJ or retG)
+        err = err or retJ or retG
+        if err is not None:
+            err = int(err)
+        else:
+            log_func = print if not rospy_enable else rospy.logwarn
+            log_func(f"The err is None by accident, it should be an integer. Currently retJ: {retJ}, retG: {retG}")
+            err = 0
         errors.append(robot_controller.lookup_error(retJ))
         errors.append(robot_controller.lookup_error(retG))
 
