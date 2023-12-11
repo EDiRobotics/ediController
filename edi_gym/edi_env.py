@@ -55,6 +55,7 @@ class EdiEnv():
         """
         obs = dict()
         robot_controller.clear_errors()
+        robot_controller.reconnect()
         time_now = rospy.Time.now()
         s, images = self._obtain_obs_through_time(time_now)
         obs["status"] = s

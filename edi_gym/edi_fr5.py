@@ -24,13 +24,13 @@ frrpc = cdll.LoadLibrary(path)
 # Now you can import frrpc and use it
 import frrpc
 
-_robot = frrpc.RPC('192.168.1.10')
 
 
 class FR5:
 
-    def __init__(self, robot):
-        self.robot = robot
+    def __init__(self, robot_ip):
+        self.robot_ip = robot_ip
+        self.robot = frrpc.RPC(self.robot_ip)
         print(f'\033[37m[__init__]: Robot initializing.. \033[0m')
         # gripper 14 cm
         gripper_length = 13.0
@@ -42,6 +42,9 @@ class FR5:
         self.move_end([600, 0, 300, -180, 0, 90])
         self.close_gripper()
         print(f'\033[37m[__init__]: Robot initialized. \033[0m')
+
+    def reconnect(self):
+        self.robot = frrpc.RPC(self.robot_ip)
 
     def _gripper_ctr(self, EF_Joint):
         try:
@@ -100,7 +103,7 @@ class FR5:
 def fr5():
     myRobot = None
     try:
-        myRobot = FR5(_robot)
+        myRobot = FR5('192.168.1.10')
     except:
         exit("Can not connect to robot!")
     return myRobot
