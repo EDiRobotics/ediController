@@ -32,7 +32,7 @@ class ImagePublisher:
             self.camera_name = f"camera_{self.camera_type}_{self.camera_number}"
             topic = f'/{self.camera_name}/image_raw'
             self.pub = rospy.Publisher(topic, Image,
-                                       queue_size=10)
+                                       queue_size=1)
             rospy.loginfo(f"Launch camera {self.camera_number} on {topic}, frame size: {frame_width}x{frame_height}")
 
     def start(self):

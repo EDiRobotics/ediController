@@ -88,7 +88,7 @@ FeedBackType_2k4 = np.dtype([
 
 rospy.init_node('robot_state_publisher')
 topic_name = "/arm_status"
-publisher = rospy.Publisher(topic_name, String, queue_size=10)
+publisher = rospy.Publisher(topic_name, String, queue_size=1)
 
 
 def get_from_title(field_name, a_data):
