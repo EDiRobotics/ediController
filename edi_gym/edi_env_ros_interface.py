@@ -21,7 +21,7 @@ def _listener():
 
 rospy.init_node('ros_interface', anonymous=True)
 topic = '/sim_env/action'
-action_publisher = rospy.Publisher(topic, String, queue_size=10)
+action_publisher = rospy.Publisher(topic, String, queue_size=1)
 
 
 def start_listening(image_topics, status_topic="/arm_status"):
