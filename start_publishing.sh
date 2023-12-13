@@ -15,13 +15,13 @@ camera_numbers=$(ls /dev/video* | sed 's/[^0-9]*//g')
 echo "Starting to obtain camera images, cameras $(echo $camera_numbers | tr '\n' ' ') are detected..."
 for camera_number in $camera_numbers
 do
-    /usr/bin/python3 get_images.py _camera_number:=$camera_number &
+    /usr/bin/python3 hardware/get_images.py _camera_number:=$camera_number &
 done
 
 echo "Starting to obtain arm status..."
-/usr/bin/python3 get_status.py &
+/usr/bin/python3 hardware/get_status.py &
 
 echo "Starting Sim Environment..."
-python sim_env.py &
+python hardware/start_sim_env.py &
 
 wait
