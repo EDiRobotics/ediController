@@ -22,7 +22,6 @@ class RoboticsToolboxSim():
     def __init__(self):
         path = os.path.dirname(__file__)
         path = os.path.join(path, "frcobot_description/fr5_robot.urdf")
-        print('URDF path: ', path)
 
         # Roboticstoolbox Ploting
         # Create a FR5 instance and give it initial joint configurations.
@@ -46,7 +45,14 @@ class RoboticsToolboxSim():
         self.real_env.step(0.0667)
 
 
-sim_env = RoboticsToolboxSim()
+rospy.init_node('sim_env', anonymous=True)
+
+try:
+    sim_env = RoboticsToolboxSim()
+    rospy.loginfo(f"Launch Sim Environment Rendering Node...")
+except Exception as e:
+    rospy.logerr(f"Error occurs when launching Sim Environment Rendering NodeL: {e}")
+    exit(0)
 
 
 def callback(msg):
@@ -65,8 +71,6 @@ def _listener():
     rospy.spin()
 
 
-rospy.init_node('sim_env', anonymous=True)
-rospy.loginfo(f"Launch Sim Environment Rendering Node...")
 thread = threading.Thread(target=_listener)
 thread.start()
 thread.join()
