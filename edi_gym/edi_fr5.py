@@ -36,7 +36,7 @@ class FR5:
     _filter_width = 6
     _trajVel = [np.zeros(6)] * _filter_width
     _first = True
-    _cmdT = 0.12
+    _cmdT = 0.012
 
     def __init__(self, robot_ip):
         self.robot_ip = robot_ip
@@ -91,6 +91,7 @@ class FR5:
         if loc[2] < self.z_thres:
             print(f"[move_joint] joint is {joint}, which is too low at {loc}, force return.")
             return 14
+        start = time.time()
         if self.method.lower() == "movej" or self._first is True:
             try:
                 j1 = joint
@@ -107,7 +108,12 @@ class FR5:
         else:
             joint = self._emaFilterVel(joint, self._lastHandlerJoint)
             try:
-                return self.robot.ServoJ(joint, 0.0, 0.0, self._cmdT, 0.0, 0.0)
+                ret = self.robot.ServoJ(joint, 0.0, 0.0, self._cmdT, 0.0, 0.0)
+                # FIXME: cmd_t is 0.0096 in original code
+                delta_sec = self._cmdT - (time.time() - start)
+                if delta_sec > 0.001:
+                    time.sleep(delta_sec)
+                return ret
             except Exception as e:
                 print(f"[move_joint] An error occurs: ", e)
 

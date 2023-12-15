@@ -26,7 +26,6 @@ def callback(msg):
     data = msg.data
     try:
         action = json.loads(data)
-        print(action)
         idx += 1
         publisher_idx.publish(idx)
         _, _, _, info = env.step(action)
