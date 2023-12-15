@@ -1,5 +1,7 @@
 import json
 import threading
+import traceback
+
 import numpy as np
 import time
 import rospy
@@ -35,12 +37,10 @@ def callback(msg):
     except json.JSONDecodeError as e:
         rospy.logwarn(f"Error json loads: {e}")
     except Exception as e:
-        rospy.logwarn(f"Error happened: {e}")
+        traceback.print_exc()
+        rospy.logwarn(f"[Collect] Error happened: {e}")
 
 
-rospy.Subscriber('/env/action/demo_action', String, callback)
-rospy.Subscriber('/env/action/policy_action', String, callback)
+rospy.Subscriber('/env/action/demo_action', String, callback, queue_size=1)
+rospy.Subscriber('/env/action/policy_action', String, callback, queue_size=1)
 rospy.spin()
-# thread = threading.Thread(target=_listener)
-# thread.start()
-# thread.join()

@@ -26,13 +26,13 @@ action_publisher = rospy.Publisher(topic, String, queue_size=1)
 
 def start_listening(image_topics, status_topic="/arm_status"):
     cache_size = 10
-    sub = message_filters.Subscriber(status_topic, String)
+    sub = message_filters.Subscriber(status_topic, String, queue_size=1)
     cache = message_filters.Cache(sub, cache_size, allow_headerless=True)
     global_status_caches[status_topic] = cache
 
     for image_topic in image_topics:
         cache_size = 10
-        sub = message_filters.Subscriber(image_topic, Image)
+        sub = message_filters.Subscriber(image_topic, Image, queue_size=1)
         cache = message_filters.Cache(sub, cache_size)
         global_image_caches[image_topic] = cache
 

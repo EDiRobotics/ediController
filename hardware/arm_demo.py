@@ -202,9 +202,7 @@ def publish_action(action):
 
 
 # import psutil
-while True:
+while not rospy.is_shutdown():
     handlerJoints = armINNFO.GetServoDegree()
     handlerJoints = JointsMap(handlerJoints)
-    # pdb.set_trace()
     publish_action(handlerJoints)
-    time.sleep(1)
