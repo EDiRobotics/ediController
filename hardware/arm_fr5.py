@@ -6,10 +6,10 @@ from typing import Dict, List, Tuple
 import numpy as np
 
 try:
-    from .errors import robot_errors
+    from .arm_fr5_errors import robot_errors
 except:
     sys.path.append(".")
-    from errors import robot_errors
+    from arm_fr5_errors import robot_errors
 
 # Get the directory containing this script
 current_dir = os.path.dirname(os.path.abspath(__file__))

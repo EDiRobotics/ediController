@@ -5,6 +5,7 @@ import time
 sys.path.append("..")
 try:
     from .edi_env_ros_interface import *
+
     rospy_enable = True
 except:
     traceback.print_exc()
@@ -16,21 +17,18 @@ from typing import Dict, List
 import json
 import numpy as np
 
-from .edi_fr5 import fr5
-
 
 # import gym
 
 
 # class EdiEnv(gym.Env):
-class EdiEnv():
+class EdiEnv:
     _action_chunk = False
 
     def __init__(self) -> None:
         super(EdiEnv, self).__init__()
 
-        self.gripper_pos = 100
-        robot_controller.set_gripper(self.gripper_pos)
+        self.gripper_pos = 0
 
         self.last_status = None
         self.last_images = {}
@@ -54,8 +52,7 @@ class EdiEnv():
               The values are OpenCV images (np.ndarray) from each camera.
         """
         obs = dict()
-        robot_controller.clear_errors()
-        robot_controller.reconnect()
+        execute_reset()
         time_now = rospy.Time.now()
         s, images = self._obtain_obs_through_time(time_now)
         obs["status"] = s
@@ -185,27 +182,7 @@ class EdiEnv():
         action = [float(a) for a in action]
         joint = action[:6]
         gripper = action[-1]
-        # sim env step
-        publish_action(action)
-
-        # real env step
-        retJ = robot_controller.move_joint(joint)
-        retG = robot_controller.set_gripper(gripper)
-        err, errors = robot_controller.detect_errors()
-
-        err = err or retJ or retG
-        if err is not None:
-            err = int(err)
-        else:
-            log_func = print if not rospy_enable else rospy.logwarn
-            log_func(f"The err is None by accident, it should be an integer. Currently retJ: {retJ}, retG: {retG}")
-            err = 0
-        errors.append(robot_controller.lookup_error(retJ))
-        errors.append(robot_controller.lookup_error(retG))
-
-        step_action_info = dict()
-        step_action_info["error"] = err
-        step_action_info["error_details"] = errors
+        step_action_info = execute_action(action)
         return step_action_info
 
     @classmethod
@@ -218,6 +195,3 @@ class EdiEnv():
         joint = action[:6]
         gripper = action[-1:]
         return joint + gripper
-
-
-robot_controller = fr5()

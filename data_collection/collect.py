@@ -16,8 +16,9 @@ _ = env.reset()
 idx = 0
 rospy.loginfo(f"Launch Data Collection...")
 
-topic_name = "/env/step_dix"
+topic_name = "/env/step_idx"
 publisher_idx = rospy.Publisher(topic_name, Int32, queue_size=10)
+topic_name = "/env/step_info"
 publisher_info = rospy.Publisher(topic_name, String, queue_size=10)
 
 

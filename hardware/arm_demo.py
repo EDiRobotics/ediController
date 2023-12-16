@@ -9,9 +9,11 @@ import numpy as np
 
 sys.path.append(r'.')
 
-from modules.udp import UDP
 import rospy
+from std_srvs.srv import Trigger, TriggerRequest, TriggerResponse
+from backend.srv import StringService, StringServiceRequest, StringServiceResponse
 from pymodbus.utilities import computeCRC
+from modules.udp import UDP
 import time
 import codecs
 
@@ -189,20 +191,24 @@ begin_time = time.time()
 print("start the joints loop at: ", begin_time)
 
 rospy.init_node('ros_interface', anonymous=True)
-topic = '/env/action/demo_action'
-action_publisher = rospy.Publisher(topic, String, queue_size=1)
+
+service = '/env/step/demo_action'
+rospy.wait_for_service(service)
+action_service = rospy.ServiceProxy(service, StringService)
 
 
-def publish_action(action):
+def execute_action(action):
     if isinstance(action, np.ndarray):
         action = action.tolist()
     action_json = json.dumps(action)
-    action_publisher.publish(String(action_json))
-    rospy.logdebug(f"Published action: {action_json}")
+    request = StringServiceRequest(action_json)
+    rospy.logdebug(f"Request action: {action_json}")
+    response = action_service(request)
+    if not response.success:
+        rospy.logerr(f"Request action return errors: {response.message}")
 
 
-# import psutil
 while not rospy.is_shutdown():
     handlerJoints = armINNFO.GetServoDegree()
     handlerJoints = JointsMap(handlerJoints)
-    publish_action(handlerJoints)
+    execute_action(handlerJoints)
