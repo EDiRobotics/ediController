@@ -2,7 +2,16 @@
 
 ### Gym Env
 
-##### Usage
+
+#### Install (New)
+
+Compile ros rpc server call dependency.
+```bash
+cd catkin_ws
+catkin_make -DPYTHON_EXECUTABLE=/usr/bin/python3
+```
+
+#### Usage
 
 1. Set hosts with on both **master** *(pc@lab)* and **slaves**
 
@@ -23,9 +32,11 @@ export ROS_MASTER_URI=http://192.168.1.240:11311 # Do not Replace this one
 
 4. Add `edi_gym` directory to your directory.
 
-5. Run `python edi_env_example.py`
+5. (New) Run `source /home/pc/ediControler/catkin_ws/devel/setup.bash`
 
-##### Run with docker on *timetserver*
+6. Run a test example `python edi_env_example.py`.
+
+#### Run with docker on *timetserver*
 
 To run in a docker container:
 ```bash
@@ -34,14 +45,3 @@ sudo docker run -it --rm --net=host --shm-size 32G \
 -v <your directory>:/workspace/<docker directory> \
 $CUDA edi/ros
 ```
-
-To run a test example:
-```bash
-cd ediControler
-python edi_env_example.py
-```
-
-CUDA="--gpus all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility -e NVIDIA_VISIBLE_DEVICES=all "
-sudo docker run -it --rm --net=host --shm-size 32G \
--v /home/radiance/ediControler:/workspace/ediControler \
-$CUDA edi/ros ldconfig
