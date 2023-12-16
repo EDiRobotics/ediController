@@ -112,7 +112,7 @@ class EdiEnv:
         for k, v in global_image_caches.items():
             cache = v
             cached_messages = cache.getInterval(timestamp - duration, timestamp)
-            img = self._fetch_img_from_msg(cached_messages)
+            img = self._fetch_img_from_msg(cached_messages, k)
             if img is None and k in self.last_images:
                 img = self.last_images[k]
             images[k] = img
@@ -149,9 +149,12 @@ class EdiEnv:
         return camera_topics
 
     @staticmethod
-    def _fetch_img_from_msg(cached_messages):
+    def _fetch_img_from_msg(cached_messages, name=None):
         if not len(cached_messages) > 0:
-            rospy.logwarn(f"Img cached_messages is empty")
+            if name:
+                rospy.logwarn(f"Img cached_messages of {name} is empty")
+            else:
+                rospy.logwarn(f"Img cached_messages is empty")
             return None
         img_msg = cached_messages[-1]
         img = cv_bridge.imgmsg_to_cv2(img_msg, "bgr8")

@@ -1,5 +1,6 @@
 from edi_gym.edi_env import EdiEnv
 import time
+import cv2
 
 base_joint = [23.0, -113.0, -102.0, -54.0, 90.0, -170.0]
 joint = base_joint
@@ -13,10 +14,11 @@ action = joint + [angle]
 # """
 env = EdiEnv()
 print(env.reset())
-for i in range(5):
+while True:
     obs, _, _, info = env.step(action)
-    print(info)
-    time.sleep(1)
+    for camera_name, image in obs["images"].items():
+        cv2.imshow(camera_name, image)
+    cv2.waitKey(1)  # Display the window until a key is pressed
 
 # ---- Test env.step_with_action only ----
 # while True:

@@ -63,6 +63,12 @@ def execute_action(action):
     response = action_service(request)
     if not response.success:
         rospy.logerr(f"Request action return errors: {response.message}")
+    try:
+        info = json.loads(response.message)
+    except json.JSONDecodeError as e:
+        rospy.logwarn(f"Error json loads: {e}")
+        return {}
+    return info
 
 
 def execute_reset():
