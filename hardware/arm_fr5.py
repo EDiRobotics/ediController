@@ -123,6 +123,9 @@ class FR5:
         e = 0 if all(ret == 0 for ret in rets) else 1
         return e, errors
 
+    def reset_first(self):
+        self._first = True
+
     def lookup_error(self, ret):
         return {ret: robot_errors[str(ret)]}
 

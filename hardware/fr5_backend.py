@@ -85,6 +85,60 @@ def handle_service(request: StringServiceRequest):
         return StringServiceResponse(success=False, message="Exception occurred")
 
 
+def handle_service_demo(request):
+    if rospy.get_param("/env/ctrl/demo", False):
+        return handle_service(request)
+    else:
+        return StringServiceResponse(success=False, message="Not Allowed")
+
+
+def handle_service_policy(request):
+    if rospy.get_param("/env/ctrl/policy", False):
+        return handle_service(request)
+    else:
+        return StringServiceResponse(success=False, message="Not Allowed")
+
+
+last_switch_state = "policy"
+rospy.set_param("/env/ctrl/switch", last_switch_state)
+rospy.set_param("/env/ctrl/policy", True)
+rospy.set_param("/env/ctrl/demo", False)
+
+
+def switch(event):
+    global last_switch_state
+    current_switch_state = rospy.get_param("/env/ctrl/switch")
+    if current_switch_state not in ["policy", "demo"]:
+        current_switch_state = last_switch_state
+        rospy.set_param("/env/ctrl/switch", current_switch_state)
+
+    if current_switch_state != last_switch_state:
+        last_switch_state = current_switch_state
+
+        current_policy_state = rospy.get_param("/env/ctrl/policy")
+        current_demo_state = rospy.get_param("/env/ctrl/demo")
+
+        robot_controller.reset_first()
+        new_policy_state = not current_policy_state
+        new_demo_state = not current_demo_state
+
+        rospy.set_param("/env/ctrl/policy", new_policy_state)
+        rospy.set_param("/env/ctrl/demo", new_demo_state)
+        robot_controller.reset_first()
+
+        if new_policy_state:
+            rospy.loginfo("Policy is now enabled.")
+        else:
+            rospy.loginfo("Policy is now disabled.")
+
+        if new_demo_state:
+            rospy.loginfo("Demo is now enabled.")
+        else:
+            rospy.loginfo("Demo is now disabled.")
+
+    assert rospy.get_param("/env/ctrl/policy") != rospy.get_param("/env/ctrl/demo")
+
+
 def rst_service(request):
     robot_controller.clear_errors()
     return TriggerResponse(
@@ -94,6 +148,7 @@ def rst_service(request):
 
 
 service_rst = rospy.Service('/env/reset', Trigger, rst_service)
-service_demo = rospy.Service('/env/step/demo_action', StringService, handle_service)
-service_policy = rospy.Service('/env/step/policy_action', StringService, handle_service)
+service_demo = rospy.Service('/env/step/demo_action', StringService, handle_service_demo)
+service_policy = rospy.Service('/env/step/policy_action', StringService, handle_service_policy)
+timer = rospy.Timer(rospy.Duration(nsecs=10), switch)
 rospy.spin()

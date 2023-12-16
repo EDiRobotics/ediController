@@ -63,6 +63,8 @@ def execute_action(action):
     response = action_service(request)
     if not response.success:
         rospy.logerr(f"Request action return errors: {response.message}")
+        if "allowed" in response.message.lower():
+            return {"error": -1, "error_details": "Not allowed"}
     try:
         info = json.loads(response.message)
     except json.JSONDecodeError as e:
