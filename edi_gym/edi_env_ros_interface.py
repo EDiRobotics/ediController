@@ -85,12 +85,16 @@ def obtain_obs_latest() -> (Dict, Dict):
         timestamp = rospy.Time.now()
 
         status = None
+        flag = 1
         for k, v in global_status_caches.items():
-            cache = v
+            cache: message_filters.Cache = v
             cached_messages = cache.getInterval(timestamp_start, timestamp)
             status = fetch_status_from_msgs(cached_messages)
             if status is None:
-                continue
+                flag = 0
+                break
+        if flag == 0:
+            continue
 
         with ThreadPoolExecutor(max_workers=8) as executor:
             futures = {k: executor.submit(process_single_cache, v, timestamp_start, timestamp, k) for k, v in
@@ -107,7 +111,7 @@ def obtain_obs_latest() -> (Dict, Dict):
 def obtain_obs_through_time(timestamp_start, timestamp) -> (Dict, Dict):
     status = None
     for k, v in global_status_caches.items():
-        cache = v
+        cache: message_filters.Cache = v
         cached_messages = cache.getInterval(timestamp_start, timestamp)
         status = fetch_status_from_msgs(cached_messages)
 

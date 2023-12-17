@@ -132,7 +132,7 @@ class FR5:
     def clear_errors(self):
         return self.robot.ResetAllError()
 
-    def _emaFilterVel(self, handler_joints, last_handler_joints, gamma=0.12, clip_th=2.0):
+    def _emaFilterVel(self, handler_joints, last_handler_joints, gamma=0.2, clip_th=2.0):
         handler_joints = np.array(handler_joints)
         last_handler_joints = np.array(last_handler_joints)
         joints_vel = handler_joints - last_handler_joints

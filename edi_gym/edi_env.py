@@ -32,7 +32,7 @@ class EdiEnv:
         register_subscribers(self.image_topics)
         start_listening()
         self._wait_until_ready()
-
+        self.reset()
         rospy.loginfo('Initialized EdiEnv.')
 
     def reset(self):

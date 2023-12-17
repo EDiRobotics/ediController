@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import json
 import threading
+import time
 
 import numpy as np
 import socket
@@ -88,7 +89,7 @@ FeedBackType_2k4 = np.dtype([
 
 rospy.init_node('robot_state_publisher')
 topic_name = "/arm_status/all"
-publisher = rospy.Publisher(topic_name, String, queue_size=1)
+publisher = rospy.Publisher(topic_name, String, queue_size=5)
 
 
 def get_from_title(field_name, a_data):

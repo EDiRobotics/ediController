@@ -148,6 +148,8 @@ def switch(event):
 
 def rst_service(request):
     robot_controller.clear_errors()
+    robot_controller.reset_first()
+
     return TriggerResponse(
         success=True,
         message=""
