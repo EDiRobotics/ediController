@@ -17,10 +17,12 @@ except:
 
 
 class EdiEnv:
+    demo = False
     _action_chunk = False
 
-    def __init__(self) -> None:
+    def __init__(self, demo=False) -> None:
         super(EdiEnv, self).__init__()
+        EdiEnv.demo = demo
 
         self.last_status = None
         self.last_images = {}
@@ -132,7 +134,7 @@ class EdiEnv:
         action = [float(a) for a in action]
         joint = action[:6]
         gripper = action[-1]
-        step_action_info = execute_action(action)
+        step_action_info = execute_action(action, demo=cls.demo)
         return step_action_info
 
     @classmethod

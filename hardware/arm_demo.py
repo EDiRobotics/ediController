@@ -206,7 +206,7 @@ def execute_action(action):
         rospy.logerr(f"Request action return errors: {response.message}")
 
 
-env = EdiEnv()
+env = EdiEnv(demo=True)
 
 while not rospy.is_shutdown():
     handlerJoints = armINNFO.GetServoDegree()

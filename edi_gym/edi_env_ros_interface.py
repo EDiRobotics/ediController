@@ -32,9 +32,12 @@ def _listener():
 topic = '/sim_env/step/action'
 action_publisher = rospy.Publisher(topic, String, queue_size=1)
 
+service = '/env/step/demo_action'
+rospy.wait_for_service(service)
+action_service_demo = rospy.ServiceProxy(service, StringService)
 service = '/env/step/policy_action'
 rospy.wait_for_service(service)
-action_service = rospy.ServiceProxy(service, StringService)
+action_service_policy = rospy.ServiceProxy(service, StringService)
 
 service = '/env/reset'
 rospy.wait_for_service(service)
@@ -159,10 +162,11 @@ def publish_action(action):
     rospy.logdebug(f"Published action: {action_json}")
 
 
-def execute_action(action):
+def execute_action(action, demo=False):
     action_json = json.dumps(action)
     request = StringServiceRequest(action_json)
     rospy.logdebug(f"Request action: {action_json}")
+    action_service = action_service_demo if demo else action_service_policy
     response = action_service(request)
     if not response.success:
         rospy.logerr(f"Request action return errors: {response.message}")
