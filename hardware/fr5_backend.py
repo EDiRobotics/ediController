@@ -54,11 +54,11 @@ rospy.init_node('backend', anonymous=True)
 rospy.loginfo(f"Launch Real Environment Backend...")
 
 topic_name = "/env/step/idx"
-publisher_idx = rospy.Publisher(topic_name, Int32, queue_size=10)
+publisher_idx = rospy.Publisher(topic_name, Int32, queue_size=100)
 topic_name = "/env/step/action"
-publisher_action = rospy.Publisher(topic_name, String, queue_size=10)
+publisher_action = rospy.Publisher(topic_name, String, queue_size=100)
 topic_name = "/env/step/info"
-publisher_info = rospy.Publisher(topic_name, String, queue_size=10)
+publisher_info = rospy.Publisher(topic_name, String, queue_size=100)
 
 idx = 0
 
@@ -84,10 +84,12 @@ def handle_service(request: StringServiceRequest):
         )
     except json.JSONDecodeError as e:
         rospy.logwarn(f"Error json loads: {e}")
-        return StringServiceResponse(success=False, message="JSON decode error")
+        error_msg = json.dumps({"error": "JSON decode error"})
+        return StringServiceResponse(success=False, message=error_msg)
     except Exception as e:
         rospy.logwarn(f"Error happened: {e}")
-        return StringServiceResponse(success=False, message="Exception occurred")
+        error_msg = json.dumps({"error": "Exception occurred"})
+        return StringServiceResponse(success=False, message=error_msg)
 
 
 def handle_service_demo(request):
