@@ -4,6 +4,7 @@ import time
 import json
 from typing import Dict, List
 import numpy as np
+import rospy
 
 sys.path.append(".")
 
@@ -77,16 +78,22 @@ class EdiEnv:
         """
         if isinstance(action, np.ndarray):
             action = action.tolist()
+        step_start = rospy.Time.now()
         step_action_info = self.step_with_action(action)
         obs = dict()
-        time_now = rospy.Time.now()
+        obtain_start = rospy.Time.now()
         s, images = self._obtain_obs_latest()
+        obtain_end = rospy.Time.now()
         obs["status"] = s
         obs["images"] = images
         reward = 0.0
         done = False
-        info = {"timestamp": time_now.to_time()}
+        info = {"timestamp_before_action": step_start.to_time(),
+                "timestamp_after_action": obtain_start.to_time()}
         info.update(step_action_info)
+        rospy.logdebug(f"[Gym: step] Action time {(obtain_start - step_start).to_sec()}")
+        rospy.logdebug(f"[Gym: step] Obtain time {(obtain_end - obtain_start).to_sec()}")
+        rospy.logdebug(f"[Gym: step] Package time {(rospy.Time.now() - obtain_end).to_sec()}")
         return obs, reward, done, info
 
     def close(self):

@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+import time
+
 import rospy
 from sensor_msgs.msg import Image
 import cv2
@@ -45,7 +47,7 @@ reset_service = rospy.ServiceProxy(service, Trigger)
 
 
 def register_subscribers(image_topics, status_topic="/arm_status/all",
-                         queue_size=1, status_cache_size=5, image_cache_size=10):
+                         queue_size=1, status_cache_size=50, image_cache_size=50):
     cache_size = status_cache_size
     sub = message_filters.Subscriber(status_topic, String, queue_size=queue_size)
     cache = message_filters.Cache(sub, cache_size, allow_headerless=True)
@@ -70,33 +72,36 @@ def get_camera_topics():
     return camera_topics
 
 
+def process_single_cache(cache, timestamp_start, timestamp, name=None):
+    cached_messages = cache.getInterval(timestamp_start, timestamp)
+    img = fetch_img_from_msgs(cached_messages, name)
+    return img
+
+
 def obtain_obs_latest() -> (Dict, Dict):
+    timestamp_start = rospy.Time.now()
+
     while not rospy.is_shutdown():
-        timestamp_start, timestamp = rospy.Time.now() - Duration(0.1), rospy.Time.now()
+        timestamp = rospy.Time.now()
+
         status = None
         for k, v in global_status_caches.items():
             cache = v
             cached_messages = cache.getInterval(timestamp_start, timestamp)
-            status = fetch_status_from_msg(cached_messages)
+            status = fetch_status_from_msgs(cached_messages)
             if status is None:
                 continue
 
-        images = {}
-        for k, v in global_image_caches.items():
-            cache = v
-            cached_messages = cache.getInterval(timestamp_start, timestamp)
-            img = fetch_img_from_msg(cached_messages, k)
-            images[k] = img
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            futures = {k: executor.submit(process_single_cache, v, timestamp_start, timestamp, k) for k, v in
+                       global_image_caches.items()}
+            images = {k: future.result() for k, future in futures.items()}
+
+        for k, img in images.items():
             if img is None:
-                continue
+                break
         else:
             return status, images
-
-        # with ThreadPoolExecutor(max_workers=8) as executor:
-        #     # Create a future for each item in global_image_caches
-        #     futures = {k: executor.submit(process_single_cache, v, timestamp_start, timestamp, k) for k, v in
-        #                global_image_caches.items()}
-        #     images = {k: future.result() for k, future in futures.items()}
 
 
 def obtain_obs_through_time(timestamp_start, timestamp) -> (Dict, Dict):
@@ -104,47 +109,31 @@ def obtain_obs_through_time(timestamp_start, timestamp) -> (Dict, Dict):
     for k, v in global_status_caches.items():
         cache = v
         cached_messages = cache.getInterval(timestamp_start, timestamp)
-        status = fetch_status_from_msg(cached_messages)
-        if status is None:
-            continue
+        status = fetch_status_from_msgs(cached_messages)
 
-    images = {}
-    for k, v in global_image_caches.items():
-        cache = v
-        cached_messages = cache.getInterval(timestamp_start, timestamp)
-        img = fetch_img_from_msg(cached_messages, k)
-        images[k] = img
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {k: executor.submit(process_single_cache, v, timestamp_start, timestamp, k) for k, v in
+                   global_image_caches.items()}
+        images = {k: future.result() for k, future in futures.items()}
 
     return status, images
 
-    # with ThreadPoolExecutor(max_workers=8) as executor:
-    #     # Create a future for each item in global_image_caches
-    #     futures = {k: executor.submit(process_single_cache, v, timestamp_start, timestamp, k) for k, v in
-    #                global_image_caches.items()}
-    #     images = {k: future.result() for k, future in futures.items()}
 
-
-def process_single_cache(cache, timestamp, duration, name=None):
-    cached_messages = cache.getInterval(timestamp - duration, timestamp)
-    img = fetch_img_from_msg(cached_messages, name)
-    return img
-
-
-def fetch_img_from_msg(cached_messages, name=None):
+def fetch_img_from_msgs(cached_messages, name=None):
     if not len(cached_messages) > 0:
-        if name:
-            rospy.logwarn(f"Img cached_messages of {name} is empty")
-        else:
-            rospy.logwarn(f"Img cached_messages is empty")
+        # if name:
+        #     rospy.logwarn(f"Img cached_messages of {name} is empty")
+        # else:
+        #     rospy.logwarn(f"Img cached_messages is empty")
         return None
     img_msg = cached_messages[-1]
     img = cv_bridge.imgmsg_to_cv2(img_msg, "bgr8")
     return img
 
 
-def fetch_status_from_msg(cached_messages):
+def fetch_status_from_msgs(cached_messages):
     if not len(cached_messages) > 0:
-        rospy.logwarn(f"Status cached_messages is empty")
+        # rospy.logwarn(f"Status cached_messages is empty")
         return None
     cached_datas = [msg.data for msg in cached_messages]
     status_data = cached_datas[-1]
