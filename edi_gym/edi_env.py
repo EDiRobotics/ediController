@@ -1,28 +1,21 @@
-import traceback
 import sys
+import traceback
 import time
+import json
+from typing import Dict, List
+import numpy as np
 
-sys.path.append("..")
+sys.path.append(".")
+
 try:
-    from .edi_env_ros_interface import *
-
-    rospy_enable = True
+    from edi_gym.edi_env_ros_interface import *
 except:
     traceback.print_exc()
     time.sleep(1)
-    rospy_enable = False
     print("Error on importing rospy...")
-    print("You can still test other unrelated functions...")
-from typing import Dict, List
-import json
-import numpy as np
-from concurrent.futures import ThreadPoolExecutor
+    exit(1)
 
 
-# import gym
-
-
-# class EdiEnv(gym.Env):
 class EdiEnv:
     _action_chunk = False
 
@@ -31,9 +24,10 @@ class EdiEnv:
 
         self.last_status = None
         self.last_images = {}
-        self.image_topics = self._get_camera_topics()
+        self.image_topics = get_camera_topics()
 
-        start_listening(self.image_topics)
+        register_subscribers(self.image_topics)
+        start_listening()
         self._wait_until_ready()
 
         rospy.loginfo('Initialized EdiEnv.')
@@ -53,7 +47,7 @@ class EdiEnv:
         obs = dict()
         execute_reset()
         time_now = rospy.Time.now()
-        s, images = self._obtain_obs_through_time(time_now)
+        s, images = self._obtain_obs_latest()
         obs["status"] = s
         obs["images"] = images
         return obs
@@ -84,7 +78,7 @@ class EdiEnv:
         step_action_info = self.step_with_action(action)
         obs = dict()
         time_now = rospy.Time.now()
-        s, images = self._obtain_obs_through_time(time_now)
+        s, images = self._obtain_obs_latest()
         obs["status"] = s
         obs["images"] = images
         reward = 0.0
@@ -96,47 +90,22 @@ class EdiEnv:
     def close(self):
         pass
 
-    def _obtain_obs_through_time(self, timestamp, time_interval=0.2) -> (Dict, Dict):
-        duration = Duration(time_interval)
-        status = None
-        for k, v in global_status_caches.items():
-            cache = v
-            cached_messages = cache.getInterval(timestamp - duration, timestamp)
-            status = self._fetch_status_from_msg(cached_messages)
-            if status is None:
-                status = self.last_status
-            self.last_status = status
-        images = {}
-        for k, v in global_image_caches.items():
-            cache = v
-            cached_messages = cache.getInterval(timestamp - duration, timestamp)
-            img = self._fetch_img_from_msg(cached_messages, k)
+    def _obtain_obs_latest(self) -> (Dict, Dict):
+        status, images = obtain_obs_latest()
+        if status is None:
+            status = self.last_status
+        self.last_status = status
+        for k, img in images.items():
             if img is None and k in self.last_images:
                 img = self.last_images[k]
             images[k] = img
             self.last_images[k] = img
-
-        # with ThreadPoolExecutor(max_workers=8) as executor:
-        #     # Create a future for each item in global_image_caches
-        #     futures = {k: executor.submit(self._process_single_cache, v, timestamp, duration, k) for k, v in
-        #                global_image_caches.items()}
-        #     for k, future in futures.items():
-        #         img = future.result()
-        #         images[k] = img
-        #         self.last_images[k] = img
         return status, images
-
-    def _process_single_cache(self, cache, timestamp, duration, name):
-        cached_messages = cache.getInterval(timestamp - duration, timestamp)
-        img = self._fetch_img_from_msg(cached_messages, name)
-        if img is None and name in self.last_images:
-            img = self.last_images[name]
-        return img
 
     def _wait_until_ready(self):
         while not rospy.is_shutdown():
             time_now = rospy.Time.now()
-            status, images = self._obtain_obs_through_time(time_now)
+            status, images = self._obtain_obs_latest()
 
             if status is not None:
                 self.last_status = status
@@ -151,39 +120,6 @@ class EdiEnv:
                 break
             rospy.loginfo('Something not available, Retrying...')
             rospy.sleep(1)
-
-    @staticmethod
-    def _get_camera_topics():
-        all_topics = rospy.get_published_topics()
-        camera_topics = [topic for topic, _ in all_topics if topic.startswith('/sensor/camera')]
-        rospy.loginfo(f"Obtain Camera topics: {str(camera_topics)}")
-        return camera_topics
-
-    @staticmethod
-    def _fetch_img_from_msg(cached_messages, name=None):
-        if not len(cached_messages) > 0:
-            if name:
-                rospy.logwarn(f"Img cached_messages of {name} is empty")
-            else:
-                rospy.logwarn(f"Img cached_messages is empty")
-            return None
-        img_msg = cached_messages[-1]
-        img = cv_bridge.imgmsg_to_cv2(img_msg, "bgr8")
-        return img
-
-    @staticmethod
-    def _fetch_status_from_msg(cached_messages):
-        if not len(cached_messages) > 0:
-            rospy.logwarn(f"Status cached_messages is empty")
-            return None
-        cached_datas = [msg.data for msg in cached_messages]
-        status_data = cached_datas[-1]
-        try:
-            status = json.loads(status_data)
-        except json.JSONDecodeError as e:
-            rospy.logwarn(f"Error json loads: {e}")
-            return None
-        return status
 
     @classmethod
     def step_with_action(cls, action: List):
