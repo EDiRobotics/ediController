@@ -155,7 +155,7 @@ class EdiEnv:
     @staticmethod
     def _get_camera_topics():
         all_topics = rospy.get_published_topics()
-        camera_topics = [topic for topic, _ in all_topics if topic.startswith('/camera')]
+        camera_topics = [topic for topic, _ in all_topics if topic.startswith('/sensor/camera')]
         rospy.loginfo(f"Obtain Camera topics: {str(camera_topics)}")
         return camera_topics
 

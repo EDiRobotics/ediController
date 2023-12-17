@@ -70,9 +70,12 @@ def handle_service(request: StringServiceRequest):
         publisher_idx.publish(idx)
         action_str = request.message
         action = json.loads(action_str)
-        action_record = {"action": action, "timestamp": rospy.Time.now().to_time(), "mode": last_switch_state}
+        action_record = {"idx": idx, "action": action, "timestamp": rospy.Time.now().to_time(),
+                         "mode": last_switch_state}
         publisher_action.publish(json.dumps(action_record))
         info = step_with_action(action)
+        idx += 1
+        publisher_idx.publish(idx)
         info_str = json.dumps(info)
         publisher_info.publish(info_str)
         return StringServiceResponse(

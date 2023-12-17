@@ -22,7 +22,7 @@ def _listener():
 
 
 rospy.init_node('ros_interface', anonymous=True)
-topic = '/sim_env/action'
+topic = '/sim_env/step/action'
 action_publisher = rospy.Publisher(topic, String, queue_size=1)
 
 service = '/env/step/policy_action'
@@ -34,7 +34,7 @@ rospy.wait_for_service(service)
 reset_service = rospy.ServiceProxy(service, Trigger)
 
 
-def start_listening(image_topics, status_topic="/arm_status"):
+def start_listening(image_topics, status_topic="/arm_status/all"):
     cache_size = 10
     sub = message_filters.Subscriber(status_topic, String, queue_size=1)
     cache = message_filters.Cache(sub, cache_size, allow_headerless=True)

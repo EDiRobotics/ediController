@@ -67,7 +67,7 @@ def callback(msg):
 
 
 def _listener():
-    rospy.Subscriber('/sim_env/action', String, callback)
+    rospy.Subscriber('/sim_env/step/action', String, callback)
     rospy.spin()
 
 

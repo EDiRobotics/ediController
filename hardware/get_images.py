@@ -30,7 +30,7 @@ class ImagePublisher:
             frame_width = self.cap_usb.get(cv2.CAP_PROP_FRAME_WIDTH)
             frame_height = self.cap_usb.get(cv2.CAP_PROP_FRAME_HEIGHT)
             self.camera_name = f"camera_{self.camera_type}_{self.camera_number}"
-            topic = f'/{self.camera_name}/image_raw'
+            topic = f'/sensor/{self.camera_name}/image_raw'
             self.pub = rospy.Publisher(topic, Image,
                                        queue_size=1)
             rospy.loginfo(f"Launch camera {self.camera_number} on {topic}, frame size: {frame_width}x{frame_height}")
