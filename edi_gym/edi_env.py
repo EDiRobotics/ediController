@@ -16,6 +16,7 @@ except:
 from typing import Dict, List
 import json
 import numpy as np
+from concurrent.futures import ThreadPoolExecutor
 
 
 # import gym
@@ -27,8 +28,6 @@ class EdiEnv:
 
     def __init__(self) -> None:
         super(EdiEnv, self).__init__()
-
-        self.gripper_pos = 0
 
         self.last_status = None
         self.last_images = {}
@@ -82,7 +81,6 @@ class EdiEnv:
         """
         if isinstance(action, np.ndarray):
             action = action.tolist()
-        self.gripper_pos = action[-1]
         step_action_info = self.step_with_action(action)
         obs = dict()
         time_now = rospy.Time.now()
@@ -117,10 +115,23 @@ class EdiEnv:
                 img = self.last_images[k]
             images[k] = img
             self.last_images[k] = img
-        if isinstance(status, dict):
-            status["gripper_pos"] = self.gripper_pos
 
+        # with ThreadPoolExecutor(max_workers=8) as executor:
+        #     # Create a future for each item in global_image_caches
+        #     futures = {k: executor.submit(self._process_single_cache, v, timestamp, duration, k) for k, v in
+        #                global_image_caches.items()}
+        #     for k, future in futures.items():
+        #         img = future.result()
+        #         images[k] = img
+        #         self.last_images[k] = img
         return status, images
+
+    def _process_single_cache(self, cache, timestamp, duration, name):
+        cached_messages = cache.getInterval(timestamp - duration, timestamp)
+        img = self._fetch_img_from_msg(cached_messages, name)
+        if img is None and name in self.last_images:
+            img = self.last_images[name]
+        return img
 
     def _wait_until_ready(self):
         while not rospy.is_shutdown():

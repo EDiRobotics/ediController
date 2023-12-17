@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 import json
+import threading
 
 import numpy as np
-import time
-import sys
+import socket
 import rospy
-from std_msgs.msg import String
+from std_msgs.msg import String, Float32
 
 FR_HOST = "192.168.1.10"
 
@@ -103,8 +103,12 @@ def get_from_title(field_name, a_data):
     return res
 
 
+gripper_pos = 0
+
+
 def getStatus():
-    import socket
+    global gripper_pos
+
     # 20004
     # 20001
     # 8083 # 维护模式 frrts2021 机器人状态采样周期 10ms
@@ -130,9 +134,26 @@ def getStatus():
         d = {}
         for field_name in FeedBackType_2k1.names:
             d[field_name] = get_from_title(field_name, a)
+        d["gripper_pos"] = gripper_pos
         json_data = json.dumps(d)
         publisher.publish(json_data)
         idx += 1
 
+
+def callback(g: Float32):
+    global gripper_pos
+    gripper_pos = g.data
+
+
+def _listener():
+    rospy.Subscriber('/sim_env/action', Float32, callback)
+    rospy.spin()
+
+
+thread = threading.Thread(target=_listener)
+thread.start()
+
 while not rospy.is_shutdown():
     getStatus()
+
+thread.join()

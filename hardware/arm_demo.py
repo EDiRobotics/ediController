@@ -2,9 +2,6 @@ import json
 import pdb
 import sys
 import json
-import rospy
-from std_msgs.msg import String
-from rospy import Duration
 import numpy as np
 
 sys.path.append(r'.')
@@ -16,6 +13,7 @@ from pymodbus.utilities import computeCRC
 from modules.udp import UDP
 import time
 import codecs
+from edi_gym.edi_env import EdiEnv
 
 J5_min = 100.0
 J5_max = 220.0
@@ -208,7 +206,9 @@ def execute_action(action):
         rospy.logerr(f"Request action return errors: {response.message}")
 
 
+env = EdiEnv()
+
 while not rospy.is_shutdown():
     handlerJoints = armINNFO.GetServoDegree()
     handlerJoints = JointsMap(handlerJoints)
-    execute_action(handlerJoints)
+    _, _, _, _ = env.step(handlerJoints)
