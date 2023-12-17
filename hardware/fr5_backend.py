@@ -61,19 +61,23 @@ topic_name = "/env/step/info"
 publisher_info = rospy.Publisher(topic_name, String, queue_size=100)
 
 idx = 0
+obs_time = rospy.Time.now()
 
 
 def handle_service(request: StringServiceRequest):
-    global idx, last_switch_state
+    global idx, last_switch_state, obs_time
     try:
         idx += 1
         publisher_idx.publish(idx)
         action_str = request.message
         action = json.loads(action_str)
-        action_record = {"idx": idx, "action": action, "timestamp": rospy.Time.now().to_time(),
+        action_record = {"idx": idx, "action": action,
+                         "timestamp": rospy.Time.now().to_time(),
+                         "obs_timestamp": obs_time.to_time(),
                          "mode": last_switch_state}
         publisher_action.publish(json.dumps(action_record))
         info = step_with_action(action)
+        obs_time = rospy.Time.now()
         idx += 1
         publisher_idx.publish(idx)
         info_str = json.dumps(info)

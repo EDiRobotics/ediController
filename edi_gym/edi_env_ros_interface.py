@@ -100,7 +100,7 @@ def obtain_obs_latest() -> (Dict, Dict):
                 status = fetch_status_from_msgs(cached_messages)
 
         with ThreadPoolExecutor(max_workers=8) as executor:
-            futures = {k: executor.submit(process_single_cache_latest, v, timestamp_start, k) for k, v in
+            futures = {k: executor.submit(process_single_cache_latest, cache, timestamp_start, k) for k, cache in
                        global_image_caches.items()}
             images = {k: future.result() for k, future in futures.items()}
 
@@ -110,13 +110,13 @@ def obtain_obs_latest() -> (Dict, Dict):
 
 def obtain_obs_through_time(timestamp_start, timestamp) -> (Dict, Dict):
     status = None
-    for k, v in global_status_caches.items():
-        cache: message_filters.Cache = v
+    for k, cache in global_status_caches.items():
+        cache: message_filters.Cache
         cached_messages = cache.getInterval(timestamp_start, timestamp)
         status = fetch_status_from_msgs(cached_messages)
 
     with ThreadPoolExecutor(max_workers=8) as executor:
-        futures = {k: executor.submit(process_single_cache, v, timestamp_start, timestamp, k) for k, v in
+        futures = {k: executor.submit(process_single_cache, cache, timestamp_start, timestamp, k) for k, cache in
                    global_image_caches.items()}
         images = {k: future.result() for k, future in futures.items()}
 

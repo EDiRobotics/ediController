@@ -119,10 +119,12 @@ class EdiEnv:
             status, images = self._obtain_obs_latest()
 
             if status is not None:
+                rospy.logerr("Status is None, which should not happen")
                 self.last_status = status
 
             for k, v in images.items():
                 if v is not None:
+                    rospy.logerr(f"Image {k} is None, which should not happen")
                     self.last_images[k] = v
 
             rospy.loginfo('Checking Availability.')

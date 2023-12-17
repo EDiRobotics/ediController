@@ -30,8 +30,9 @@ action_queue = queue.Queue()
 
 
 def save_data_for_imitation_learning(observations, action_data):
+    pass
     print("------------------------")
-    print(f"last_action_idx {last_action_idx}, last_idx {last_idx} ")
+    print(f"last_action_idx {last_action_idx}, last_idx {last_idx}, action {action_data} ")
     print("------------------------")
 
 
@@ -45,14 +46,14 @@ class Recorder:
         self.last_images = {}
 
         register_subscribers(self.image_topics,
-                             queue_size=int(1e2),
-                             status_cache_size=int(1e4),
-                             image_cache_size=int(1e4))
+                             queue_size=int(1e4),
+                             status_cache_size=int(1e5),
+                             image_cache_size=int(1e5))
         self._wait_until_ready()
 
         rospy.Subscriber('/env/step/action', String, self.action_callback, queue_size=100)
         rospy.Subscriber('/env/step/idx', Int32, self.idx_callback, queue_size=100)
-        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=100)
 
         self.action_thread = threading.Thread(target=self.process_actions)
         self.action_thread.daemon = True
@@ -75,7 +76,7 @@ class Recorder:
                     break
                 # rospy.logwarn(f"Waiting for timestamp for idx {current_idx}...")
                 retry += 1
-                time.sleep(0.01)
+                time.sleep(0.05)
         if not (start_time and end_time):
             rospy.logwarn(f"Timestamp for idx {current_idx} does not exist!")
             return
@@ -87,10 +88,11 @@ class Recorder:
                 save_data_for_imitation_learning(observations, action_data)
                 break
             else:
-                if retry > 500:
+                if retry > 5:
                     rospy.logerr(f"Observation for idx {current_idx} does not exist, {observations}")
                     return
                 retry += 1
+                time.sleep(0.05)
 
     def process_actions(self):
         """
@@ -98,10 +100,10 @@ class Recorder:
         """
 
         while not rospy.is_shutdown():
-            action_data_json = action_queue.get()
-            self.executor.submit(self._handle_action, action_data_json)
-
-            # action_queue.task_done()
+            if not action_queue.empty():
+                action_data_json = action_queue.get()
+                # self.executor.submit(self._handle_action, action_data_json)
+                self._handle_action(action_data_json)
 
     def collect_observations(self, start_time, end_time):
         """
@@ -127,7 +129,8 @@ class Recorder:
         Callback for when an idx is received.
         """
         global last_action_idx, last_idx
-        idx_timestamps[idx_msg.data] = rospy.Time.now()
+        # FIXME:
+        # idx_timestamps[idx_msg.data] = rospy.Time.now()
         if last_idx + 1 != idx_msg.data and last_idx != -1:
             rospy.logerr(f"Idx {last_idx + 1} missed")
         last_idx = idx_msg.data
@@ -140,6 +143,11 @@ class Recorder:
         action_data = json.loads(action_msg.data)
         action_queue.put(action_msg.data)
         current_idx = action_data.get('idx', None)
+        # FIXME:
+        timestamp = action_data.get('timestamp')
+        obs_timestamp = action_data.get('obs_timestamp')
+        idx_timestamps[current_idx] = rospy.Time.from_sec(timestamp)
+        idx_timestamps[current_idx - 1] = rospy.Time.from_sec(obs_timestamp)
         last_action_idx = current_idx
 
     def _wait_until_ready(self):
