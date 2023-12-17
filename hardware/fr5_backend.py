@@ -4,7 +4,7 @@ import sys
 
 sys.path.append(".")
 import rospy
-from std_msgs.msg import String, Int32
+from std_msgs.msg import String, Int32, Float32
 from std_srvs.srv import Trigger, TriggerResponse
 from backend.srv import StringService, StringServiceRequest, StringServiceResponse
 from hardware.arm_fr5 import fr5
@@ -14,6 +14,9 @@ try:
 except Exception as e:
     rospy.logerr(f"Error occurs when launching Real Environment Backend: {e}")
     exit(0)
+
+topic_name = "/arm_status/gripper_pos"
+publisher_gripper = rospy.Publisher(topic_name, Float32, queue_size=5)
 
 
 def step_with_action(action):
@@ -26,6 +29,7 @@ def step_with_action(action):
     action = [float(a) for a in action]
     joint = action[:6]
     gripper = action[-1]
+    publisher_gripper.publish(gripper)
     # real env step
     retJ = robot_controller.move_joint(joint)
     retG = robot_controller.set_gripper(gripper)

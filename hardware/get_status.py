@@ -146,7 +146,8 @@ def callback(g: Float32):
 
 
 def _listener():
-    rospy.Subscriber('/sim_env/action', Float32, callback)
+    topic = "/arm_status/gripper_pos"
+    rospy.Subscriber(topic, Float32, callback)
     rospy.spin()
 
 
