@@ -7,13 +7,13 @@ import rospy
 
 rospy.init_node('rosbag_parser')
 
-
 import json
 import rosbag
 from std_msgs.msg import String, Int32
 from sensor_msgs.msg import Image
 import message_filters
 import rospy
+
 
 def load_from_bag(file_name):
     bag = rosbag.Bag(file_name)
@@ -60,11 +60,13 @@ def load_from_bag(file_name):
         for topic, messages in topics.items():
             if topic == status_topic or topic in sensor_topics:
                 for msg, msg_time in messages:
-                    if start_time is not None and msg_time > start_time and msg_time <= end_time:
+                    if start_time is not None and msg_time > start_time:
+                        # if start_time is not None and msg_time > start_time and msg_time <= end_time:
                         if topic == status_topic:
                             observations["status"].append(msg)
                         else:
                             observations["sensors"][topic].append(msg)
+                        break
 
         results.append({
             "idx": idx,
@@ -75,6 +77,9 @@ def load_from_bag(file_name):
     bag.close()
 
     del results[0]
+    del results[-1]
+    print("Len", len(results))
+
     for item in results:
         idx = item["idx"]
         observations = item["observations"]
@@ -86,7 +91,6 @@ def load_from_bag(file_name):
                 print(f"idx {idx} {k} is empty")
 
     return results
-
 
 
 def find_files_with_extension(directory, extension):

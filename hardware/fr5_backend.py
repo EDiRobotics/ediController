@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 import json
 import sys
+import time
+import traceback
 
 sys.path.append(".")
 import rospy
@@ -71,8 +73,11 @@ def handle_service(request: StringServiceRequest):
         publisher_idx.publish(idx)
         action_str = request.message
         action = json.loads(action_str)
+        action_time = rospy.Time.now()
+        # if not rospy.Time.now() >= obs_time + rospy.Duration(secs=0.1):
+        #     time.sleep((obs_time + rospy.Duration(secs=0.1) - rospy.Time.now()).to_sec())
         action_record = {"idx": idx, "action": action,
-                         "timestamp": rospy.Time.now().to_time(),
+                         "timestamp": action_time.to_time(),
                          "obs_timestamp": obs_time.to_time(),
                          "mode": last_switch_state}
         publisher_action.publish(json.dumps(action_record))
@@ -91,6 +96,7 @@ def handle_service(request: StringServiceRequest):
         error_msg = json.dumps({"error": "JSON decode error"})
         return StringServiceResponse(success=False, message=error_msg)
     except Exception as e:
+        traceback.print_exc()
         rospy.logwarn(f"Error happened: {e}")
         error_msg = json.dumps({"error": "Exception occurred"})
         return StringServiceResponse(success=False, message=error_msg)
@@ -163,5 +169,5 @@ def rst_service(request):
 service_rst = rospy.Service('/env/reset', Trigger, rst_service)
 service_demo = rospy.Service('/env/step/demo_action', StringService, handle_service_demo)
 service_policy = rospy.Service('/env/step/policy_action', StringService, handle_service_policy)
-timer = rospy.Timer(rospy.Duration(nsecs=10), switch)
+timer = rospy.Timer(rospy.Duration(nsecs=100), switch)
 rospy.spin()

@@ -78,6 +78,15 @@ def process_single_cache(cache, timestamp_start, timestamp, name=None):
     return img
 
 
+def process_single_cache_after(cache, timestamp_start, name=None):
+    img = None
+    latest = cache.getLatestTime()
+    if latest is not None and timestamp_start < latest:
+        cached_messages = [cache.getElemAfterTime(timestamp_start)]
+        img = fetch_img_from_msgs(cached_messages, name)
+    return img
+
+
 def process_single_cache_latest(cache, timestamp_start, name=None):
     img = None
     latest = cache.getLatestTime()
@@ -101,6 +110,25 @@ def obtain_obs_latest() -> (Dict, Dict):
 
         with ThreadPoolExecutor(max_workers=8) as executor:
             futures = {k: executor.submit(process_single_cache_latest, cache, timestamp_start, k) for k, cache in
+                       global_image_caches.items()}
+            images = {k: future.result() for k, future in futures.items()}
+
+        if status is not None and all(v is not None for v in images.values()):
+            return status, images
+
+
+def obtain_obs_after_time(timestamp_start) -> (Dict, Dict):
+    while not rospy.is_shutdown():
+        status = None
+        for k, cache in global_status_caches.items():
+            cache: message_filters.Cache
+            latest = cache.getLatestTime()
+            if latest is not None and timestamp_start < latest:
+                cached_messages = [cache.getElemAfterTime(timestamp_start)]
+                status = fetch_status_from_msgs(cached_messages)
+
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            futures = {k: executor.submit(process_single_cache_after, cache, timestamp_start, k) for k, cache in
                        global_image_caches.items()}
             images = {k: future.result() for k, future in futures.items()}
 

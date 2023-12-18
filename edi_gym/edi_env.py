@@ -91,6 +91,7 @@ class EdiEnv:
         info = {"timestamp_before_action": step_start.to_time(),
                 "timestamp_after_action": obtain_start.to_time()}
         info.update(step_action_info)
+        rospy.logdebug(f"[Gym: step] Step_start {step_start}, Obtain_start {obtain_start}, ")
         rospy.logdebug(f"[Gym: step] Action time {(obtain_start - step_start).to_sec()}")
         rospy.logdebug(f"[Gym: step] Obtain time {(obtain_end - obtain_start).to_sec()}")
         rospy.logdebug(f"[Gym: step] Package time {(rospy.Time.now() - obtain_end).to_sec()}")
@@ -102,12 +103,12 @@ class EdiEnv:
     def _obtain_obs_latest(self) -> (Dict, Dict):
         status, images = obtain_obs_latest()
         if status is None:
-            rospy.logerr("Status is None, which should not happen")
+            rospy.logerr(f"[Serious] Status is None, which should not happen")
             status = self.last_status
         self.last_status = status
         for k, img in images.items():
             if img is None and k in self.last_images:
-                rospy.logerr(f"Image {k} is None, which should not happen")
+                rospy.logerr(f"[Serious] Image {k} is None, which should not happen")
                 img = self.last_images[k]
             images[k] = img
             self.last_images[k] = img
@@ -115,19 +116,17 @@ class EdiEnv:
 
     def _wait_until_ready(self):
         while not rospy.is_shutdown():
-            time_now = rospy.Time.now()
+            rospy.loginfo('Checking Availability.')
             status, images = self._obtain_obs_latest()
 
-            if status is not None:
+            if status is None:
                 rospy.logerr("Status is None, which should not happen")
                 self.last_status = status
 
             for k, v in images.items():
-                if v is not None:
+                if v is None:
                     rospy.logerr(f"Image {k} is None, which should not happen")
                     self.last_images[k] = v
-
-            rospy.loginfo('Checking Availability.')
 
             if status is not None and all(v is not None for v in images.values()):
                 break
@@ -143,8 +142,6 @@ class EdiEnv:
         """
         # action = cls._action_chunk(action)
         action = [float(a) for a in action]
-        joint = action[:6]
-        gripper = action[-1]
         step_action_info = execute_action(action, demo=cls.demo)
         return step_action_info
 

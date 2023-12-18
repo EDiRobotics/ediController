@@ -127,6 +127,8 @@ class FR5:
         self._first = True
 
     def lookup_error(self, ret):
+        if ret is None:
+            ret = 0
         return {ret: robot_errors[str(ret)]}
 
     def clear_errors(self):
