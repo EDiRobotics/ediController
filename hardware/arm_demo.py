@@ -7,8 +7,9 @@ import numpy as np
 sys.path.append(r'.')
 
 import rospy
-from std_srvs.srv import Trigger, TriggerRequest, TriggerResponse
-from backend.srv import StringService, StringServiceRequest, StringServiceResponse
+
+rospy.init_node('arm_demo', anonymous=True)
+
 from pymodbus.utilities import computeCRC
 from modules.udp import UDP
 import time
@@ -19,6 +20,25 @@ J5_min = 100.0
 J5_max = 220.0
 EF_min = -60.0
 EF_max = 60.0
+
+
+# from std_srvs.srv import Trigger, TriggerRequest, TriggerResponse
+# from backend.srv import StringService, StringServiceRequest, StringServiceResponse
+# service = '/env/step/demo_action_srv'
+# rospy.wait_for_service(service)
+# action_service = rospy.ServiceProxy(service, StringService)
+# rospy.loginfo(f"Server {service} is ready...")
+#
+#
+# def execute_action(action):
+#     if isinstance(action, np.ndarray):
+#         action = action.tolist()
+#     action_json = json.dumps(action)
+#     request = StringServiceRequest(action_json)
+#     rospy.logdebug(f"Request action: {action_json}")
+#     response = action_service(request)
+#     if not response.success:
+#         rospy.logerr(f"Request action return errors: {response.message}")
 
 
 def crc(data):
@@ -187,24 +207,6 @@ handlerJoints = JointsMap(handlerJoints)
 
 begin_time = time.time()
 print("start the joints loop at: ", begin_time)
-
-rospy.init_node('ros_interface', anonymous=True)
-
-service = '/env/step/demo_action_srv'
-rospy.wait_for_service(service)
-action_service = rospy.ServiceProxy(service, StringService)
-
-
-def execute_action(action):
-    if isinstance(action, np.ndarray):
-        action = action.tolist()
-    action_json = json.dumps(action)
-    request = StringServiceRequest(action_json)
-    rospy.logdebug(f"Request action: {action_json}")
-    response = action_service(request)
-    if not response.success:
-        rospy.logerr(f"Request action return errors: {response.message}")
-
 
 env = EdiEnv(demo=True)
 
