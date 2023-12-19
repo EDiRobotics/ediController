@@ -1,3 +1,8 @@
+"""
+FIXME: DO NOT USE THIS FILE, USE BAG RECORD INSTEAD
+"""
+exit(1)
+
 import sys
 import traceback
 import time
