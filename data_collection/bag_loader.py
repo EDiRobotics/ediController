@@ -162,8 +162,6 @@ def execute_action(action):
 
 
 def display_sensor_data(results):
-    original_state = rospy.get_param("/env/ctrl/switch", None)
-    rospy.set_param("/env/ctrl/switch", "replay")
     base_timestamp = results["base_timestamp"]
     base_timestamp = rospy.Time(base_timestamp)
     time_offset = rospy.Time.now() - base_timestamp
@@ -199,9 +197,13 @@ def display_sensor_data(results):
     cv2.destroyAllWindows()
 
     time.sleep(1)
-    rospy.set_param("/env/ctrl/switch", original_state)
 
 
+original_state = rospy.get_param("/env/ctrl/switch", None)
+rospy.set_param("/env/ctrl/switch", "replay")
 for i, (full_file_name, results) in enumerate(all_results):
     rospy.loginfo(f"Start to replay {full_file_name}...")
     display_sensor_data(results)
+rospy.set_param("/env/ctrl/switch", original_state)
+rospy.loginfo(f"Finish all replay tasks, switch back to {original_state} state...")
+
