@@ -116,31 +116,38 @@ def handle_service_policy(request):
         return StringServiceResponse(success=False, message="Not Allowed")
 
 
+def handle_service_replay(request):
+    if rospy.get_param("/env/ctrl/replay", False):
+        return handle_service(request)
+    else:
+        return StringServiceResponse(success=False, message="Not Allowed")
+
+
 last_switch_state = "policy"
 rospy.set_param("/env/ctrl/switch", last_switch_state)
 rospy.set_param("/env/ctrl/policy", True)
 rospy.set_param("/env/ctrl/demo", False)
+rospy.set_param("/env/ctrl/replay", False)
 
 
 def switch(event):
     global last_switch_state
     current_switch_state = rospy.get_param("/env/ctrl/switch")
-    if current_switch_state not in ["policy", "demo"]:
+    if current_switch_state not in ["policy", "demo", "replay"]:
         current_switch_state = last_switch_state
         rospy.set_param("/env/ctrl/switch", current_switch_state)
 
     if current_switch_state != last_switch_state:
         last_switch_state = current_switch_state
 
-        current_policy_state = rospy.get_param("/env/ctrl/policy")
-        current_demo_state = rospy.get_param("/env/ctrl/demo")
-
         robot_controller.reset_first()
-        new_policy_state = not current_policy_state
-        new_demo_state = not current_demo_state
+        new_policy_state = (current_switch_state == "policy")
+        new_demo_state = (current_switch_state == "demo")
+        new_replay_state = (current_switch_state == "replay")
 
         rospy.set_param("/env/ctrl/policy", new_policy_state)
         rospy.set_param("/env/ctrl/demo", new_demo_state)
+        rospy.set_param("/env/ctrl/replay", new_replay_state)
         robot_controller.reset_first()
 
         if new_policy_state:
@@ -153,7 +160,15 @@ def switch(event):
         else:
             rospy.loginfo("Demo is now disabled.")
 
-    assert rospy.get_param("/env/ctrl/policy") != rospy.get_param("/env/ctrl/demo")
+        if new_replay_state:
+            rospy.loginfo("Replay is now enabled.")
+        else:
+            rospy.loginfo("Replay is now disabled.")
+
+    assert (int(rospy.get_param("/env/ctrl/policy")) +
+            int(rospy.get_param("/env/ctrl/demo")) +
+            int(rospy.get_param("/env/ctrl/replay")) <= 1
+            )
 
 
 def rst_service(request):
@@ -167,6 +182,7 @@ def rst_service(request):
 
 
 service_rst = rospy.Service('/env/reset_srv', Trigger, rst_service)
+service_replay = rospy.Service('/env/step/replay_action_srv', StringService, handle_service_replay)
 service_demo = rospy.Service('/env/step/demo_action_srv', StringService, handle_service_demo)
 service_policy = rospy.Service('/env/step/policy_action_srv', StringService, handle_service_policy)
 timer = rospy.Timer(rospy.Duration(nsecs=100), switch)

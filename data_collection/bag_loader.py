@@ -82,10 +82,11 @@ def load_from_bag(file_name, config):
             "action": action_data["action"],
             "obs": observations,
             "obs_timestamp": action_data["obs_timestamp"],
-            "timestamp": action_data["timestamp"],
+            "action_timestamp": action_data["timestamp"],
             "action_mode": action_data["mode"],
         })
 
+    base_timestamp = results[0]["action_timestamp"]
     del results[0]
     del results[-1]
 
@@ -99,25 +100,10 @@ def load_from_bag(file_name, config):
         for k, messages in observations["sensors"].items():
             if len(messages) == 0:
                 rospy.logwarn(f"idx {idx} {k} is empty")
-
+        del item["idx"]
+    results = {"base_timestamp": base_timestamp, "records": results}
+    results.update(config)
     return results
-
-
-def display_sensor_data(results):
-    for result in results:
-        observations = result['obs']
-        obs_timestamp = result['obs_timestamp']
-        for sensor_topic, sensor_msgs in observations['sensors'].items():
-            for sensor_msg in sensor_msgs:
-                try:
-                    cv_image = bridge.imgmsg_to_cv2(sensor_msg, "bgr8")
-                except CvBridgeError as e:
-                    rospy.logerr(e)
-                    break
-                cv2.imshow(sensor_topic, cv_image)
-                cv2.waitKey(1)
-    cv2.destroyAllWindows()
-    time.sleep(1)
 
 
 def find_files_with_extension(directory, extension):
@@ -134,6 +120,7 @@ extension = ".bag"
 file_list = find_files_with_extension(file_dir, extension)
 
 rospy.loginfo(f"Find RosBag file list: {file_list}")
+all_results = []
 for i, full_file_name in enumerate(file_list):
 
     file_name = os.path.basename(full_file_name)
@@ -148,4 +135,67 @@ for i, full_file_name in enumerate(file_list):
     with open(json_full_name, 'r') as file:
         meta_data = json.load(file)
     results = load_from_bag(full_file_name, config=meta_data)
+    all_results.append((full_file_name, results))
+
+rospy.loginfo(f"----- Starting to replay -----")
+
+from std_srvs.srv import Trigger, TriggerRequest, TriggerResponse
+from backend.srv import StringService, StringServiceRequest, StringServiceResponse
+
+service = '/env/step/replay_action_srv'
+rospy.wait_for_service(service)
+action_service = rospy.ServiceProxy(service, StringService)
+rospy.loginfo(f"Server {service} is ready...")
+
+
+def execute_action(action):
+    if isinstance(action, np.ndarray):
+        action = action.tolist()
+    action_json = json.dumps(action)
+    request = StringServiceRequest(action_json)
+    rospy.logdebug(f"Request action: {action_json}")
+    response = action_service(request)
+    if not response.success:
+        rospy.logerr(f"Request action return errors: {response.message}")
+
+
+def display_sensor_data(results):
+    original_state = rospy.get_param("/env/ctrl/switch", None)
+    rospy.set_param("/env/ctrl/switch", "replay")
+    base_timestamp = results["base_timestamp"]
+    base_timestamp = rospy.Time(base_timestamp)
+    time_offset = rospy.Time.now() - base_timestamp
+
+    for i, result in enumerate(results["records"]):
+        observations = result['obs']
+        obs_timestamp = result['obs_timestamp']
+        obs_timestamp = rospy.Time(obs_timestamp)
+
+        action_timestamp = result['action_timestamp']
+        action_timestamp = rospy.Time(action_timestamp)
+
+        action = result['action']
+        adjusted_act_timestamp = action_timestamp + time_offset
+        if rospy.Time.now() < adjusted_act_timestamp:
+            rospy.sleep(adjusted_act_timestamp - rospy.Time.now())
+        execute_action(action)
+
+    #     next_obs_timestamp = results[i + 1]['obs_timestamp'] if (i + 1) < len(results) else result['obs_timestamp'] + 1
+    #     for sensor_topic, sensor_msgs in observations['sensors'].items():
+    #         for sensor_msg in sensor_msgs:
+    #             try:
+    #                 cv_image = bridge.imgmsg_to_cv2(sensor_msg, "bgr8")
+    #             except CvBridgeError as e:
+    #                 rospy.logerr(e)
+    #                 break
+    #             cv2.imshow(sensor_topic, cv_image)
+    #             cv2.waitKey(int((next_obs_timestamp - obs_timestamp) * 1000))
+    # cv2.destroyAllWindows()
+
+    time.sleep(1)
+    rospy.set_param("/env/ctrl/switch", original_state)
+
+
+for i, (full_file_name, results) in enumerate(all_results):
+    rospy.loginfo(f"Start to replay {full_file_name}...")
     display_sensor_data(results)
