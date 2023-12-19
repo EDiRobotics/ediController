@@ -166,8 +166,8 @@ def rst_service(request):
     )
 
 
-service_rst = rospy.Service('/env/reset', Trigger, rst_service)
-service_demo = rospy.Service('/env/step/demo_action', StringService, handle_service_demo)
-service_policy = rospy.Service('/env/step/policy_action', StringService, handle_service_policy)
+service_rst = rospy.Service('/env/reset_srv', Trigger, rst_service)
+service_demo = rospy.Service('/env/step/demo_action_srv', StringService, handle_service_demo)
+service_policy = rospy.Service('/env/step/policy_action_srv', StringService, handle_service_policy)
 timer = rospy.Timer(rospy.Duration(nsecs=100), switch)
 rospy.spin()

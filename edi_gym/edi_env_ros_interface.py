@@ -34,14 +34,14 @@ def _listener():
 topic = '/sim_env/step/action'
 action_publisher = rospy.Publisher(topic, String, queue_size=1)
 
-service = '/env/step/demo_action'
+service = '/env/step/demo_action_srv'
 rospy.wait_for_service(service)
 action_service_demo = rospy.ServiceProxy(service, StringService)
-service = '/env/step/policy_action'
+service = '/env/step/policy_action_srv'
 rospy.wait_for_service(service)
 action_service_policy = rospy.ServiceProxy(service, StringService)
 
-service = '/env/reset'
+service = '/env/reset_srv'
 rospy.wait_for_service(service)
 reset_service = rospy.ServiceProxy(service, Trigger)
 

@@ -2,71 +2,84 @@
 import json
 import os
 import datetime
+import signal
 import subprocess
 import time
 
-import airsim
 import rospy
-import rosbag
 from std_msgs.msg import Int8
+from std_srvs.srv import Trigger, TriggerResponse
 
-now = datetime.datetime.now()
-name = now.strftime("%Y%m%d_%H%M%S")
-
-record_length = 30
-max_record = 4
-dir_name = f'/home/radiance/projects/Swarm-Formation/bags/{name}/'
-
-if not os.path.exists(dir_name):
-    os.makedirs(dir_name)
+datetime_start = datetime.datetime.now()
+datetime_start = datetime_start.strftime("%Y%m%d%H%M%S")
+meta = {"datetime": datetime_start}
 
 rospy.init_node('record_bags')
-rospy.set_param('/record/dir_name', dir_name)
-rospy.set_param('/record/start_record', False)
-rospy.set_param('/record/max_record', max_record)
-rospy.set_param('/record/max_record', record_length)
-rospy.loginfo("[bag] Init record_bags node")
+rospy.loginfo("[bag] Init Records node")
 
-while not rospy.is_shutdown():
-    if rospy.get_param('/record/start_record', False):
-        params = rospy.get_param_names()
-        d = {k: str(rospy.get_param(k)) for k in params}
-        with open(os.path.join(dir_name, 'params.json'), 'w') as f:
-            json.dump(d, f)
-        trust = {"trust": []}
-        with open(os.path.join(dir_name, 'trust.json'), 'w') as f:
-            json.dump(trust, f)
-        break
+current_process = None
+current_bag_full_path = None
+i = 0
 
-rospy.loginfo(f"[bag] Record Start...")
 
-last_i = -1
-publisher = rospy.Publisher('/section', Int8, queue_size=10)
-start_time = time.time()
-bag_name = os.path.join(dir_name, f'all.bag')
-# command = "source /home/radiance/projects/Swarm-Formation/devel/setup.bash;"
-command = "rosbag record -a -O {} --duration={}s".format(os.path.join(dir_name, bag_name), max_record * record_length)
-process = subprocess.Popen(command, shell=True)
+def start_record_service(req):
+    global current_process, current_bag_full_path, i
+    if current_process is None:
+        i += 1
+        bag_name = f'all_topics'
+        now = datetime.datetime.now()
+        now = now.strftime("%Y%m%d_%H%M%S")
+        dir_name = f'./bag/{now}/'
+        if not os.path.exists(dir_name):
+            os.makedirs(dir_name)
+        current_bag_full_path = os.path.join(dir_name, bag_name)
+        rospy.set_param('/record/ctrl/save_directory', dir_name)
+        current_process = start_record(current_bag_full_path)
+        return TriggerResponse(success=True, message="Recording started.")
+    else:
+        return TriggerResponse(success=False, message="Recording is already running.")
 
-while not rospy.is_shutdown():
-    if time.time() - start_time >= max_record * record_length:
-        break
-    i = int((time.time() - start_time) / record_length)
-    if i > last_i:
-        rospy.loginfo(f"\n--- Start record part {i}/{max_record} ---\n")
-        last_i = i
-    rospy.sleep(1)
-    publisher.publish(i)
 
-process.wait()
-process.terminate()
-rospy.loginfo(f"[bag] Record Finished...")
-rospy.set_param('/record/start_record', False)
+def end_record_service(req):
+    global current_process, current_bag_full_path, i
+    if current_process is not None:
+        end_record(current_process, current_bag_full_path)
+        current_process = None
+        return TriggerResponse(success=True, message="Recording stopped.")
+    else:
+        return TriggerResponse(success=False, message="No recording is currently running.")
 
-rospy.sleep(3)
-if not rospy.is_shutdown():
-    rospy.signal_shutdown("Recording finished")
-    global_client = airsim.MultirotorClient()
-    global_client.confirmConnection()
-    global_client.reset()
-    os.system("pkill -f ros")
+
+def start_record(bag_full_path: str) -> subprocess.Popen:
+    dir_name, _ = os.path.split(bag_full_path)
+    all_params = rospy.get_param_names()
+    d = {k: str(rospy.get_param(k)) for k in all_params}
+    with open(os.path.join(dir_name, 'params.json'), 'w') as f:
+        json.dump(d, f)
+    meta = {"episode": int(datetime_start) * 1000 + i}
+    with open(os.path.join(dir_name, 'meta.json'), 'w') as f:
+        json.dump(meta, f)
+    rospy.set_param('/record/ctrl/recording', True)
+    command = "rosbag record -a -O {} ".format(bag_full_path)
+    rospy.loginfo(f"\n--- Start record {bag_full_path} ---\n")
+    process = subprocess.Popen(command, shell=True)
+    return process
+
+
+def end_record(process: subprocess.Popen, bag_full_path: str):
+    os.killpg(os.getpgid(process.pid), signal.SIGINT)
+    process.wait()
+    process.terminate()
+    rospy.set_param('/record/ctrl/recording', False)
+    rospy.loginfo(f"\n--- End record {bag_full_path} ---\n")
+
+
+# start_service = rospy.Service('/record/ctrl/start_record_srv', Trigger, start_record_service)
+# end_service = rospy.Service('/record/ctrl/end_record_srv', Trigger, end_record_service)
+#
+# rospy.spin()
+
+if __name__ == "__main__":
+    start_record_service(None)
+    time.sleep(5)
+    end_record_service(None)

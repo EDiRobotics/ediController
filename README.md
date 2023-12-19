@@ -55,7 +55,7 @@ export ROS_MASTER_URI=http://192.168.1.240:11311 # Do not Replace this one
 
 4. **(New) Run `source /home/pc/ediControler/catkin_ws/devel/setup.bash`**
 
-5. Run a test example `python hardware/.py`.
+5. Run demo arm `python hardware/arm_demo.py`.
 
 ## Run with Docker on *timetserver*
 

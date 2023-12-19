@@ -5,7 +5,7 @@ import json
 from typing import Dict, List
 import numpy as np
 
-sys.path.append(".")
+sys.path.append("../edi_gym")
 
 import rospy
 
@@ -28,9 +28,14 @@ last_idx = -1
 
 action_queue = queue.Queue()
 
+import cv2
+
 
 def save_data_for_imitation_learning(observations, action_data):
     pass
+    for camera_name, image in observations["images"].items():
+        cv2.imshow(f"collect_camera_name", image)
+    cv2.waitKey(1)  # Display the window until a key is pressed
     print("------------------------")
     print(f"last_action_idx {last_action_idx}, last_idx {last_idx}, action {action_data} ")
     print("------------------------")
@@ -49,20 +54,21 @@ class Recorder:
                              queue_size=int(1e4),
                              status_cache_size=int(1e5),
                              image_cache_size=int(1e5))
+        start_listening()
         self._wait_until_ready()
 
         rospy.Subscriber('/env/step/action', String, self.action_callback, queue_size=100)
         rospy.Subscriber('/env/step/idx', Int32, self.idx_callback, queue_size=100)
-        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=100)
 
-        self.action_thread = threading.Thread(target=self.process_actions)
-        self.action_thread.daemon = True
-        self.action_thread.start()
+        # self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=100)
+        # self.action_thread = threading.Thread(target=self.process_actions)
+        # self.action_thread.daemon = True
+        # self.action_thread.start()
 
     def _handle_action(self, action_data_json):
 
         action_data = json.loads(action_data_json)
-        current_idx = action_data.get('idx', None)
+        current_idx = action_data.get('idx')
         start_time = None
         end_time = None
         retry = 0
@@ -90,6 +96,7 @@ class Recorder:
             else:
                 if retry > 5:
                     rospy.logerr(f"Observation for idx {current_idx} does not exist, {observations}")
+                    rospy.logerr(f"Start_time {start_time}, end_time {end_time}, diff {end_time - start_time}")
                     return
                 retry += 1
                 time.sleep(0.05)
@@ -104,25 +111,26 @@ class Recorder:
                 action_data_json = action_queue.get()
                 # self.executor.submit(self._handle_action, action_data_json)
                 self._handle_action(action_data_json)
+            else:
+                time.sleep(0.2)
 
     def collect_observations(self, start_time, end_time):
         """
         Collects observations between the given start and end timestamps.
         """
-        status, images = obtain_obs_through_time(start_time, end_time)
+        # status, images = obtain_obs_through_time(start_time, end_time)
+        status, images = obtain_obs_after_time(start_time)
         if status is None:
             # rospy.logerr(f"Status not found.")
             return f"Status not found."
-            status = self.last_status
         self.last_status = status
         for k, img in images.items():
             if img is None and k in self.last_images:
                 # rospy.logerr(f"Image {k} not found.")
                 return f"Image {k} not found."
-                img = self.last_images[k]
             images[k] = img
             self.last_images[k] = img
-        return {"status": status, "sensors": images}
+        return {"status": status, "images": images}
 
     def idx_callback(self, idx_msg):
         """
@@ -141,14 +149,14 @@ class Recorder:
         """
         global last_action_idx, last_idx
         action_data = json.loads(action_msg.data)
-        action_queue.put(action_msg.data)
+        # action_queue.put(action_msg.data)
         current_idx = action_data.get('idx', None)
-        # FIXME:
-        timestamp = action_data.get('timestamp')
+        # FIXME:        timestamp = action_data.get('timestamp')
         obs_timestamp = action_data.get('obs_timestamp')
         idx_timestamps[current_idx] = rospy.Time.from_sec(timestamp)
         idx_timestamps[current_idx - 1] = rospy.Time.from_sec(obs_timestamp)
         last_action_idx = current_idx
+        self._handle_action(action_msg.data)
 
     def _wait_until_ready(self):
         while not rospy.is_shutdown():
@@ -183,4 +191,5 @@ class Recorder:
 
 
 recorder = Recorder()
-rospy.spin()
+while not rospy.is_shutdown():
+    time.sleep(5)

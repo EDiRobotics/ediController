@@ -190,7 +190,7 @@ print("start the joints loop at: ", begin_time)
 
 rospy.init_node('ros_interface', anonymous=True)
 
-service = '/env/step/demo_action'
+service = '/env/step/demo_action_srv'
 rospy.wait_for_service(service)
 action_service = rospy.ServiceProxy(service, StringService)
 
@@ -211,4 +211,7 @@ env = EdiEnv(demo=True)
 while not rospy.is_shutdown():
     handlerJoints = armINNFO.GetServoDegree()
     handlerJoints = JointsMap(handlerJoints)
-    _, _, _, _ = env.step(handlerJoints)
+    action = handlerJoints
+    step_start = rospy.Time.now()
+    obs, _, _, info = env.step(action)
+    rospy.logdebug(f"[Demo] Step time {(rospy.Time.now() - step_start).to_sec()}")
