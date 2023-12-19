@@ -101,7 +101,8 @@ def load_from_bag(file_name, config):
             if len(messages) == 0:
                 rospy.logwarn(f"idx {idx} {k} is empty")
         del item["idx"]
-    results = {"base_timestamp": base_timestamp, "records": results}
+
+    results = {"base_timestamp": base_timestamp, "records": results, "max_step": len(results)}
     results.update(config)
     return results
 
@@ -206,4 +207,3 @@ for i, (full_file_name, results) in enumerate(all_results):
     display_sensor_data(results)
 rospy.set_param("/env/ctrl/switch", original_state)
 rospy.loginfo(f"Finish all replay tasks, switch back to {original_state} state...")
-
