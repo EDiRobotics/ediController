@@ -137,6 +137,8 @@ for i, full_file_name in enumerate(file_list):
     results = load_from_bag(full_file_name, config=meta_data)
     all_results.append((full_file_name, results))
 
+# TODO: Save data to LMDB Datasets
+
 rospy.loginfo(f"----- Starting to replay -----")
 
 from std_srvs.srv import Trigger, TriggerRequest, TriggerResponse
@@ -170,6 +172,20 @@ def display_sensor_data(results):
         observations = result['obs']
         obs_timestamp = result['obs_timestamp']
         obs_timestamp = rospy.Time(obs_timestamp)
+        adjusted_obs_timestamp = obs_timestamp + time_offset
+
+        if rospy.Time.now() < adjusted_obs_timestamp:
+            rospy.sleep(adjusted_obs_timestamp - rospy.Time.now())
+
+        for sensor_topic, sensor_msgs in observations['sensors'].items():
+            for sensor_msg in sensor_msgs:
+                try:
+                    cv_image = bridge.imgmsg_to_cv2(sensor_msg, "bgr8")
+                except CvBridgeError as e:
+                    rospy.logerr(e)
+                    break
+                cv2.imshow(sensor_topic, cv_image)
+                cv2.waitKey(1)
 
         action_timestamp = result['action_timestamp']
         action_timestamp = rospy.Time(action_timestamp)
@@ -180,17 +196,7 @@ def display_sensor_data(results):
             rospy.sleep(adjusted_act_timestamp - rospy.Time.now())
         execute_action(action)
 
-    #     next_obs_timestamp = results[i + 1]['obs_timestamp'] if (i + 1) < len(results) else result['obs_timestamp'] + 1
-    #     for sensor_topic, sensor_msgs in observations['sensors'].items():
-    #         for sensor_msg in sensor_msgs:
-    #             try:
-    #                 cv_image = bridge.imgmsg_to_cv2(sensor_msg, "bgr8")
-    #             except CvBridgeError as e:
-    #                 rospy.logerr(e)
-    #                 break
-    #             cv2.imshow(sensor_topic, cv_image)
-    #             cv2.waitKey(int((next_obs_timestamp - obs_timestamp) * 1000))
-    # cv2.destroyAllWindows()
+    cv2.destroyAllWindows()
 
     time.sleep(1)
     rospy.set_param("/env/ctrl/switch", original_state)

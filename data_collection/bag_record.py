@@ -81,5 +81,5 @@ def end_record(process: subprocess.Popen, bag_full_path: str):
 
 if __name__ == "__main__":
     start_record_service(None)
-    time.sleep(5)
+    time.sleep(8)
     end_record_service(None)
