@@ -1,3 +1,4 @@
+import argparse
 import json
 import os
 import time
@@ -5,20 +6,12 @@ import time
 import numpy as np
 import rosbag
 import rospy
-
-rospy.init_node('rosbag_parser')
-
 import json
 import rosbag
 from std_msgs.msg import String, Int32
 from sensor_msgs.msg import Image
 import message_filters
 import rospy
-
-import cv2
-from cv_bridge import CvBridge, CvBridgeError
-
-bridge = CvBridge()
 
 
 def load_from_bag(file_name, config):
@@ -116,94 +109,73 @@ def find_files_with_extension(directory, extension):
     return file_list
 
 
-file_dir = "./bag/"
-extension = ".bag"
-file_list = find_files_with_extension(file_dir, extension)
+def record(input_path, delete_bag=False):
+    if not os.path.exists(input_path):
+        rospy.loginfo(f"Input path {input_path} doesn't exist, exiting...")
+        exit(1)
+    if os.path.isfile(input_path) and input_path.endswith(".bag"):
+        file_list = [input_path]
+    elif os.path.isdir(input_path):
+        file_dir = input_path
+        extension = ".bag"
+        file_list = find_files_with_extension(file_dir, extension)
+    else:
+        raise NotImplementedError
 
-rospy.loginfo(f"Find RosBag file list: {file_list}")
-all_results = []
-for i, full_file_name in enumerate(file_list):
+    rospy.loginfo(f"Find RosBag file list: {file_list}")
+    all_results = []
+    for i, full_file_name in enumerate(file_list):
+        file_name = os.path.basename(full_file_name)
+        name = os.path.splitext(file_name)[0]
+        folder_name = os.path.dirname(full_file_name)
+        rospy.loginfo(f"[{i}] Loading {full_file_name}...")
+        json_full_name = os.path.join(folder_name, "meta.json")
+        if not os.path.exists(json_full_name):
+            rospy.logerr(f"[{i}] meta json not found...")
+            continue
+        with open(json_full_name, 'r') as file:
+            meta_data = json.load(file)
 
-    file_name = os.path.basename(full_file_name)
-    name = os.path.splitext(file_name)[0]
-    folder_name = os.path.dirname(full_file_name)
-    rospy.loginfo(f"[{i}] Loading {full_file_name}...")
+        if "save_path" not in meta_data:
+            results = load_from_bag(full_file_name, config=meta_data)
+            all_results.append((full_file_name, results))
+            # TODO: Save data to LMDB Datasets
 
-    json_full_name = os.path.join(folder_name, "meta.json")
-    if not os.path.exists(json_full_name):
-        rospy.logerr(f"[{i}] meta json not found...")
-        continue
-    with open(json_full_name, 'r') as file:
-        meta_data = json.load(file)
-    results = load_from_bag(full_file_name, config=meta_data)
-    all_results.append((full_file_name, results))
+            # TODO: Write back meta_data to 'meta.json'
+            lmdb_save_path = None
+            meta_data["save_path"] = lmdb_save_path
+            with open(json_full_name, 'w') as file:
+                json.dump(meta_data, file, indent=4)
 
-# TODO: Save data to LMDB Datasets
+        if delete_bag:
+            try:
+                os.remove(full_file_name)
+                rospy.loginfo(f"[{i}] Deleted {full_file_name}")
+            except OSError as e:
+                rospy.logerr(f"[{i}] Error deleting {full_file_name}: {e.strerror}")
+    rospy.loginfo(f"Record everything in {input_path}!")
 
-rospy.loginfo(f"----- Starting to replay -----")
-
-from std_srvs.srv import Trigger, TriggerRequest, TriggerResponse
-from backend.srv import StringService, StringServiceRequest, StringServiceResponse
-
-service = '/env/step/replay_action_srv'
-rospy.wait_for_service(service)
-action_service = rospy.ServiceProxy(service, StringService)
-rospy.loginfo(f"Server {service} is ready...")
-
-
-def execute_action(action):
-    if isinstance(action, np.ndarray):
-        action = action.tolist()
-    action_json = json.dumps(action)
-    request = StringServiceRequest(action_json)
-    rospy.logdebug(f"Request action: {action_json}")
-    response = action_service(request)
-    if not response.success:
-        rospy.logerr(f"Request action return errors: {response.message}")
-
-
-def display_sensor_data(results):
-    base_timestamp = results["base_timestamp"]
-    base_timestamp = rospy.Time(base_timestamp)
-    time_offset = rospy.Time.now() - base_timestamp
-
-    for i, result in enumerate(results["records"]):
-        observations = result['obs']
-        obs_timestamp = result['obs_timestamp']
-        obs_timestamp = rospy.Time(obs_timestamp)
-        adjusted_obs_timestamp = obs_timestamp + time_offset
-
-        if rospy.Time.now() < adjusted_obs_timestamp:
-            rospy.sleep(adjusted_obs_timestamp - rospy.Time.now())
-
-        for sensor_topic, sensor_msgs in observations['sensors'].items():
-            for sensor_msg in sensor_msgs:
-                try:
-                    cv_image = bridge.imgmsg_to_cv2(sensor_msg, "bgr8")
-                except CvBridgeError as e:
-                    rospy.logerr(e)
-                    break
-                cv2.imshow(sensor_topic, cv_image)
-                cv2.waitKey(1)
-
-        action_timestamp = result['action_timestamp']
-        action_timestamp = rospy.Time(action_timestamp)
-
-        action = result['action']
-        adjusted_act_timestamp = action_timestamp + time_offset
-        if rospy.Time.now() < adjusted_act_timestamp:
-            rospy.sleep(adjusted_act_timestamp - rospy.Time.now())
-        execute_action(action)
-
-    cv2.destroyAllWindows()
-
-    time.sleep(1)
+    return all_results
 
 
-original_state = rospy.get_param("/env/ctrl/switch", None)
-rospy.set_param("/env/ctrl/switch", "replay")
-for i, (full_file_name, results) in enumerate(all_results):
-    rospy.loginfo(f"Start to replay {full_file_name}...")
-    display_sensor_data(results)
-rospy.set_param("/env/ctrl/switch", original_state)
-rospy.loginfo(f"Finish all replay tasks, switch back to {original_state} state...")
+if __name__ == "__main__":
+    rospy.init_node('rosbag_parser')
+
+    parser = argparse.ArgumentParser(description='Bag Loader To LMDB Dataset',
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('path', type=str, default="./bag/",
+                        help='Path can be a rosbag file or a directory (recursively search).')
+    parser.add_argument('--delete_bag', default=False, action='store_true',
+                        help='Whether to delete the original rosbag file, default is False')
+    args = parser.parse_args()
+
+    input_path: str = args.path
+    delete_bag: bool = args.delete_bag
+    all_results = record(input_path, delete_bag)
+    from data_collection.replay import display_sensor_data
+
+    rospy.loginfo(f"----- Starting to replay -----")
+    for i, (full_file_name, results) in enumerate(all_results):
+        rospy.loginfo(f"Start to replay {full_file_name}...")
+        display_sensor_data(results)
+    rospy.loginfo(f"Finish all replay tasks...")

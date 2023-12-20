@@ -2,13 +2,16 @@
 import json
 import os
 import datetime
+import queue
 import signal
 import subprocess
+import threading
 import time
 
 import rospy
 from std_msgs.msg import Int8
 from std_srvs.srv import Trigger, TriggerResponse
+from data_collection.bag_loader import record
 
 datetime_start = datetime.datetime.now()
 datetime_start = datetime_start.strftime("%Y%m%d%H%M%S")
@@ -20,6 +23,8 @@ rospy.loginfo("[bag] Init Records node")
 current_process = None
 current_bag_full_path = None
 i = 0
+
+save_queue = queue.Queue()
 
 
 def start_record_service(req):
@@ -72,12 +77,27 @@ def end_record(process: subprocess.Popen, bag_full_path: str):
     process.terminate()
     rospy.set_param('/record/ctrl/recording', False)
     rospy.loginfo(f"\n--- End record {bag_full_path} ---\n")
+    save_queue.put(bag_full_path)
 
 
 # start_service = rospy.Service('/record/ctrl/start_record_srv', Trigger, start_record_service)
 # end_service = rospy.Service('/record/ctrl/end_record_srv', Trigger, end_record_service)
 #
 # rospy.spin()
+
+
+def convert():
+    while not rospy.is_shutdown():
+        if save_queue.empty():
+            time.sleep(0.5)
+            continue
+        bag_full_path = save_queue.get()
+        record(bag_full_path)
+
+
+convert_thread = threading.Thread(target=convert)
+convert_thread.daemon = True
+convert_thread.start()
 
 if __name__ == "__main__":
     start_record_service(None)
