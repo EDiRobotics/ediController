@@ -2,7 +2,6 @@ import argparse
 import json
 import os
 import time
-
 import numpy as np
 import rosbag
 import rospy
@@ -10,8 +9,8 @@ import json
 import rosbag
 from std_msgs.msg import String, Int32
 from sensor_msgs.msg import Image
-import message_filters
 import rospy
+from data_collection.lmdb_saver import save_to_lmdb
 
 
 def load_from_bag(file_name, config):
@@ -139,9 +138,7 @@ def record(input_path, delete_bag=False):
         if "save_path" not in meta_data:
             results = load_from_bag(full_file_name, config=meta_data)
             all_results.append((full_file_name, results))
-            # TODO: Save data to LMDB Datasets
-
-            # TODO: Write back meta_data to 'meta.json'
+            save_to_lmdb(results)
             lmdb_save_path = None
             meta_data["save_path"] = lmdb_save_path
             with open(json_full_name, 'w') as file:
