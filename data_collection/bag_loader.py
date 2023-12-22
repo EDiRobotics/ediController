@@ -108,7 +108,7 @@ def find_files_with_extension(directory, extension):
     return file_list
 
 
-def record(input_path, delete_bag=False):
+def record(input_path, output_path=None, delete_bag=False):
     if not os.path.exists(input_path):
         rospy.loginfo(f"Input path {input_path} doesn't exist, exiting...")
         exit(1)
@@ -138,7 +138,11 @@ def record(input_path, delete_bag=False):
         if "save_path" not in meta_data:
             results = load_from_bag(full_file_name, config=meta_data)
             all_results.append((full_file_name, results))
-            save_to_lmdb(results)
+            success = save_to_lmdb(results, output_path)
+            if not success:
+                rospy.logerr(f"Error occurs when dumping {full_file_name}!")
+                continue
+
             lmdb_save_path = None
             meta_data["save_path"] = lmdb_save_path
             with open(json_full_name, 'w') as file:
