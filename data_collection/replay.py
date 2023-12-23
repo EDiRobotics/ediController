@@ -1,12 +1,8 @@
 import time
 import numpy as np
-import rosbag
-import rospy
 import json
 import rosbag
-from std_msgs.msg import String, Int32
-from sensor_msgs.msg import Image
-import message_filters
+from tqdm import tqdm
 import rospy
 from std_srvs.srv import Trigger, TriggerRequest, TriggerResponse
 from backend.srv import StringService, StringServiceRequest, StringServiceResponse
@@ -16,9 +12,10 @@ from cv_bridge import CvBridge, CvBridgeError
 bridge = CvBridge()
 
 service = '/env/step/replay_action_srv'
+rospy.loginfo(f"[replay] Waiting for server {service} to be ready...")
 rospy.wait_for_service(service)
 action_service = rospy.ServiceProxy(service, StringService)
-rospy.loginfo(f"Server {service} is ready...")
+rospy.loginfo(f"[replay] Server {service} is ready...")
 
 
 def execute_action(action):
@@ -32,15 +29,17 @@ def execute_action(action):
         rospy.logerr(f"Request action return errors: {response.message}")
 
 
-def display_sensor_data(results):
+def display_sensor_data(results, display_image=False):
     original_state = rospy.get_param("/env/ctrl/switch", None)
     rospy.set_param("/env/ctrl/switch", "replay")
-
+    if "episode" in results:
+        episode = results["episode"]
+        rospy.loginfo(f"[replay] Replay {episode}..")
     base_timestamp = results["base_timestamp"]
     base_timestamp = rospy.Time(base_timestamp)
     time_offset = rospy.Time.now() - base_timestamp
 
-    for i, result in enumerate(results["records"]):
+    for i, result in tqdm(enumerate(results["records"]), total=len(results["records"])):
         observations = result['obs']
         obs_timestamp = result['obs_timestamp']
         obs_timestamp = rospy.Time(obs_timestamp)
@@ -48,15 +47,11 @@ def display_sensor_data(results):
 
         if rospy.Time.now() < adjusted_obs_timestamp:
             rospy.sleep(adjusted_obs_timestamp - rospy.Time.now())
-
-        for sensor_topic, sensor_msgs in observations['sensors'].items():
-            for sensor_msg in sensor_msgs:
-                try:
-                    cv_image = bridge.imgmsg_to_cv2(sensor_msg, "bgr8")
-                except CvBridgeError as e:
-                    rospy.logerr(e)
-                    break
-                cv2.imshow(sensor_topic, cv_image)
+        if display_image:
+            for sensor_topic, cv_image in observations['sensors'].items():
+                cv_image = np.transpose(cv_image, (1, 2, 0))
+                # cv_image = cv_image[..., ::-1]
+                cv2.imshow(f"replay_{sensor_topic}", cv_image)
                 cv2.waitKey(1)
 
         action_timestamp = result['action_timestamp']
@@ -69,6 +64,4 @@ def display_sensor_data(results):
         execute_action(action)
 
     cv2.destroyAllWindows()
-
-    time.sleep(0.5)
     rospy.set_param("/env/ctrl/switch", original_state)

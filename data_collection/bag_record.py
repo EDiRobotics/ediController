@@ -7,10 +7,13 @@ import signal
 import subprocess
 import threading
 import time
-
+import sys
 import rospy
+import psutil
 from std_msgs.msg import Int8
 from std_srvs.srv import Trigger, TriggerResponse
+
+sys.path.append(".")
 from data_collection.bag_loader import record
 
 datetime_start = datetime.datetime.now()
@@ -18,8 +21,9 @@ datetime_start = datetime_start.strftime("%Y%m%d%H%M%S")
 meta = {"datetime": datetime_start}
 
 rospy.init_node('record_bags')
+bag_save_base = f"dataset/bag"
 lmdb_save_path = f"dataset/train_{datetime_start}_lmdb"
-rospy.loginfo(f"[bag] Init records node, lmdb save path is {lmdb_save_path}")
+rospy.loginfo(f"[recordh] Init records node, lmdb save path is {lmdb_save_path}")
 
 current_process = None
 current_bag_full_path = None
@@ -32,10 +36,10 @@ def start_record_service(req):
     global current_process, current_bag_full_path, i
     if current_process is None:
         i += 1
-        bag_name = f'all_topics'
+        bag_name = f'all_topics.bag'
         now = datetime.datetime.now()
         now = now.strftime("%Y%m%d_%H%M%S")
-        dir_name = f'./bag/{now}/'
+        dir_name = os.path.join(bag_save_base, now)
         if not os.path.exists(dir_name):
             os.makedirs(dir_name)
         current_bag_full_path = os.path.join(dir_name, bag_name)
@@ -72,13 +76,23 @@ def start_record(bag_full_path: str) -> subprocess.Popen:
     return process
 
 
+def terminate_process_and_children(p):
+    process = psutil.Process(p.pid)
+    for sub_process in process.children(recursive=True):
+        sub_process.send_signal(signal.SIGINT)
+    p.wait()
+    p.terminate()
+
+
 def end_record(process: subprocess.Popen, bag_full_path: str):
-    os.killpg(os.getpgid(process.pid), signal.SIGINT)
-    process.wait()
-    process.terminate()
+    global save_queue
+    rospy.loginfo(f"\n--- Killing record of {bag_full_path} ---\n")
+    terminate_process_and_children(process)
+    # process.send_signal(signal.SIGINT)
     rospy.set_param('/record/ctrl/recording', False)
     rospy.loginfo(f"\n--- End record {bag_full_path} ---\n")
     save_queue.put(bag_full_path)
+    time.sleep(1)
 
 
 # start_service = rospy.Service('/record/ctrl/start_record_srv', Trigger, start_record_service)
@@ -89,18 +103,25 @@ def end_record(process: subprocess.Popen, bag_full_path: str):
 
 def convert():
     while not rospy.is_shutdown():
+        global save_queue
         if save_queue.empty():
-            time.sleep(0.5)
+            time.sleep(.1)
+            # rospy.loginfo(f"[record] Queue is empty, waiting for rosbag.")
             continue
+        rospy.loginfo(f"[record] Queue is not empty.")
         bag_full_path = save_queue.get()
-        record(bag_full_path, lmdb_save_path=lmdb_save_path)
+        rospy.loginfo(f"[record] Get {bag_full_path}, start saving to lmdb...")
+        try:
+            record(bag_full_path, lmdb_save_path=lmdb_save_path)
+        except Exception as e:
+            rospy.logerr(f"[record] Saving {bag_full_path} error: {e}...")
 
 
 convert_thread = threading.Thread(target=convert)
-convert_thread.daemon = True
 convert_thread.start()
 
 if __name__ == "__main__":
     start_record_service(None)
-    time.sleep(8)
+    time.sleep(5)
     end_record_service(None)
+    convert_thread.join()

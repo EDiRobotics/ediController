@@ -243,7 +243,8 @@ if __name__ == "__main__":
     Test load from lmdb and replay
     """
     import rospy
-
+    import sys
+    sys.path.append(".")
     rospy.init_node('lmdb_loader')
 
     parser = argparse.ArgumentParser(description='LMDB Dataset Loader Test',
@@ -253,7 +254,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     lmdb_directory: str = args.path
     keys = load_keys_from_lmdb(lmdb_directory)
-    all_results = [load_episode_from_lmdb(lmdb_directory, key) for key in keys]
+    all_results = [(key, load_episode_from_lmdb(lmdb_directory, key)) for key in keys]
     print(all_results)
 
     dataset = EpisodicLMDBDataset(lmdb_directory)

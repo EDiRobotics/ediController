@@ -172,13 +172,18 @@ def switch(event):
 
 
 def rst_service(request):
-    robot_controller.clear_errors()
-    robot_controller.reset_first()
-
-    return TriggerResponse(
-        success=True,
-        message=""
-    )
+    try:
+        robot_controller.clear_errors()
+        robot_controller.reset_first()
+        return TriggerResponse(
+            success=True,
+            message=""
+        )
+    except Exception as e:
+        return TriggerResponse(
+            success=False,
+            message=f"{str(e)}"
+        )
 
 
 service_rst = rospy.Service('/env/reset_srv', Trigger, rst_service)

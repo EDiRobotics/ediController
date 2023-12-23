@@ -1,5 +1,6 @@
 import argparse
 import json
+import sys
 import os
 import time
 import numpy as np
@@ -10,9 +11,9 @@ import rosbag
 from std_msgs.msg import String, Int32
 import cv2
 from cv_bridge import CvBridge
-
 from sensor_msgs.msg import Image
 import rospy
+sys.path.append(".")
 from data_collection.lmdb_interface import save_to_lmdb
 
 bridge = CvBridge()
@@ -184,7 +185,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Bag Loader To LMDB Dataset',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--path', type=str, default="./bag/",
+    parser.add_argument('--path', type=str, default="./dataset/bag/",
                         help='Path can be a rosbag file or a directory (recursively search).')
     parser.add_argument('--delete_bag', default=False, action='store_true',
                         help='Whether to delete the original rosbag file, default is False')

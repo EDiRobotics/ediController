@@ -49,6 +49,8 @@ class EdiEnv:
         """
         obs = dict()
         execute_reset()
+        if not self.demo:
+            rospy.set_param("/env/ctrl/switch", "policy")
         time_now = rospy.Time.now()
         s, images = self._obtain_obs_latest()
         obs["status"] = s
