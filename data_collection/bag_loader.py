@@ -8,9 +8,14 @@ import rospy
 import json
 import rosbag
 from std_msgs.msg import String, Int32
+import cv2
+from cv_bridge import CvBridge
+
 from sensor_msgs.msg import Image
 import rospy
 from data_collection.lmdb_saver import save_to_lmdb
+
+bridge = CvBridge()
 
 
 def load_from_bag(file_name, config):
@@ -64,9 +69,12 @@ def load_from_bag(file_name, config):
                     if start_time is not None and msg_time > start_time:
                         # if start_time is not None and msg_time > start_time and msg_time <= end_time:
                         if topic == status_topic:
-                            observations["status"].append(msg)
+                            status = json.loads(msg.data)
+                            observations["status"].append(status)
                         else:
-                            observations["sensors"][topic].append(msg)
+                            msg: Image
+                            img = bridge.imgmsg_to_cv2(msg, "bgr8")
+                            observations["sensors"][topic].append(img)
                         break
 
         results.append({
@@ -89,9 +97,15 @@ def load_from_bag(file_name, config):
         messages = observations["status"]
         if len(messages) == 0:
             rospy.logwarn(f"idx {idx} status is empty")
+            observations["status"] = None
+        else:
+            observations["status"] = messages[0]
         for k, messages in observations["sensors"].items():
             if len(messages) == 0:
                 rospy.logwarn(f"idx {idx} {k} is empty")
+                observations["sensors"][k] = None
+            else:
+                observations["sensors"][k] = messages[0]
         del item["idx"]
 
     results = {"base_timestamp": base_timestamp, "records": results, "max_step": len(results)}
@@ -108,7 +122,7 @@ def find_files_with_extension(directory, extension):
     return file_list
 
 
-def record(input_path, output_path=None, delete_bag=False):
+def record(input_path, lmdb_save_path=None, delete_bag=False):
     if not os.path.exists(input_path):
         rospy.loginfo(f"Input path {input_path} doesn't exist, exiting...")
         exit(1)
@@ -138,15 +152,17 @@ def record(input_path, output_path=None, delete_bag=False):
         if "save_path" not in meta_data:
             results = load_from_bag(full_file_name, config=meta_data)
             all_results.append((full_file_name, results))
-            success = save_to_lmdb(results, output_path)
+            success = save_to_lmdb(results, lmdb_save_path)
             if not success:
                 rospy.logerr(f"Error occurs when dumping {full_file_name}!")
                 continue
 
-            lmdb_save_path = None
-            meta_data["save_path"] = lmdb_save_path
-            with open(json_full_name, 'w') as file:
-                json.dump(meta_data, file, indent=4)
+            if lmdb_save_path is not None:
+                meta_data["save_path"] = lmdb_save_path
+                with open(json_full_name, 'w') as file:
+                    json.dump(meta_data, file, indent=4)
+        else:
+            rospy.loginfo(f"[{i}] Pass {full_file_name} because save_path exists...")
 
         if delete_bag:
             try:
@@ -164,7 +180,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Bag Loader To LMDB Dataset',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('path', type=str, default="./bag/",
+    parser.add_argument('--path', type=str, default="./bag/",
                         help='Path can be a rosbag file or a directory (recursively search).')
     parser.add_argument('--delete_bag', default=False, action='store_true',
                         help='Whether to delete the original rosbag file, default is False')
@@ -172,10 +188,11 @@ if __name__ == "__main__":
 
     input_path: str = args.path
     delete_bag: bool = args.delete_bag
-    all_results = record(input_path, delete_bag)
-    from data_collection.replay import display_sensor_data
+    all_results = record(input_path, lmdb_save_path="dataset", delete_bag=delete_bag)
 
     rospy.loginfo(f"----- Starting to replay -----")
+    from data_collection.replay import display_sensor_data
+
     for i, (full_file_name, results) in enumerate(all_results):
         rospy.loginfo(f"Start to replay {full_file_name}...")
         display_sensor_data(results)

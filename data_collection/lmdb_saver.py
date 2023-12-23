@@ -1,6 +1,7 @@
 # TODO: Save data to LMDB Datasets
 
 import os
+import traceback
 from pickle import dumps, loads
 import lmdb
 import numpy as np
@@ -79,6 +80,7 @@ def save_to_lmdb(records, data_dir):
         env.close()
         return True
     except:
+        traceback.print_exc()
         return False
 
 

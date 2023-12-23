@@ -18,7 +18,8 @@ datetime_start = datetime_start.strftime("%Y%m%d%H%M%S")
 meta = {"datetime": datetime_start}
 
 rospy.init_node('record_bags')
-rospy.loginfo("[bag] Init Records node")
+lmdb_save_path = "dataset"
+rospy.loginfo(f"[bag] Init records node, lmdb save path is {lmdb_save_path}")
 
 current_process = None
 current_bag_full_path = None
@@ -92,7 +93,7 @@ def convert():
             time.sleep(0.5)
             continue
         bag_full_path = save_queue.get()
-        record(bag_full_path)
+        record(bag_full_path, lmdb_save_path=lmdb_save_path)
 
 
 convert_thread = threading.Thread(target=convert)
