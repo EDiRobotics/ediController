@@ -18,7 +18,7 @@ datetime_start = datetime_start.strftime("%Y%m%d%H%M%S")
 meta = {"datetime": datetime_start}
 
 rospy.init_node('record_bags')
-lmdb_save_path = f"dataset/train_{datetime_start}"
+lmdb_save_path = f"dataset/train_{datetime_start}_lmdb"
 rospy.loginfo(f"[bag] Init records node, lmdb save path is {lmdb_save_path}")
 
 current_process = None

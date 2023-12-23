@@ -13,7 +13,7 @@ from cv_bridge import CvBridge
 
 from sensor_msgs.msg import Image
 import rospy
-from data_collection.lmdb_saver import save_to_lmdb
+from data_collection.lmdb_interface import save_to_lmdb
 
 bridge = CvBridge()
 
@@ -122,7 +122,7 @@ def find_files_with_extension(directory, extension):
     return file_list
 
 
-def record(input_path, lmdb_save_path=None, delete_bag=False):
+def record(input_path, lmdb_save_path=None, delete_bag=False, cover_exist=False):
     if not os.path.exists(input_path):
         rospy.loginfo(f"Input path {input_path} doesn't exist, exiting...")
         exit(1)
@@ -149,7 +149,7 @@ def record(input_path, lmdb_save_path=None, delete_bag=False):
         with open(json_full_name, 'r') as file:
             meta_data = json.load(file)
 
-        if "save_path" not in meta_data:
+        if "save_path" not in meta_data or cover_exist:
             results = load_from_bag(full_file_name, config=meta_data)
             all_results.append((full_file_name, results))
             success = save_to_lmdb(results, lmdb_save_path)
@@ -176,6 +176,9 @@ def record(input_path, lmdb_save_path=None, delete_bag=False):
 
 
 if __name__ == "__main__":
+    """
+    Test load rosbag and replay
+    """
     rospy.init_node('rosbag_parser')
 
     parser = argparse.ArgumentParser(description='Bag Loader To LMDB Dataset',
@@ -188,7 +191,7 @@ if __name__ == "__main__":
 
     input_path: str = args.path
     delete_bag: bool = args.delete_bag
-    all_results = record(input_path, lmdb_save_path="dataset/test", delete_bag=delete_bag)
+    all_results = record(input_path, lmdb_save_path="dataset/test", delete_bag=delete_bag, cover_exist=True)
 
     rospy.loginfo(f"----- Starting to replay -----")
     from data_collection.replay import display_sensor_data
