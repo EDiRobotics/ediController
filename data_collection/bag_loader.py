@@ -158,7 +158,8 @@ def record(input_path, lmdb_save_path=None, delete_bag=False, cover_exist=False)
                 continue
 
             if lmdb_save_path is not None:
-                meta_data["save_path"] = lmdb_save_path
+                absolute_lmdb_save_path = os.path.abspath(lmdb_save_path)
+                meta_data["save_path"] = absolute_lmdb_save_path
                 with open(json_full_name, 'w') as file:
                     json.dump(meta_data, file, indent=4)
         else:
