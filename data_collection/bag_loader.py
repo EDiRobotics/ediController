@@ -162,7 +162,7 @@ def record(input_path, lmdb_save_path=None, delete_bag=False):
                 with open(json_full_name, 'w') as file:
                     json.dump(meta_data, file, indent=4)
         else:
-            rospy.loginfo(f"[{i}] Pass {full_file_name} because save_path exists...")
+            rospy.logwarn(f"[{i}] Pass {full_file_name} because save_path exists...")
 
         if delete_bag:
             try:
@@ -188,7 +188,7 @@ if __name__ == "__main__":
 
     input_path: str = args.path
     delete_bag: bool = args.delete_bag
-    all_results = record(input_path, lmdb_save_path="dataset", delete_bag=delete_bag)
+    all_results = record(input_path, lmdb_save_path="dataset/test", delete_bag=delete_bag)
 
     rospy.loginfo(f"----- Starting to replay -----")
     from data_collection.replay import display_sensor_data

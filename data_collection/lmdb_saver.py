@@ -1,5 +1,4 @@
-# TODO: Save data to LMDB Datasets
-
+import argparse
 import os
 import traceback
 from pickle import dumps, loads
@@ -76,7 +75,13 @@ def save_to_lmdb(records, data_dir):
 
                 # Save action mode
                 txn.put(f'{record_key_prefix}action_mode'.encode(), dumps(record['action_mode']))
-
+            try:
+                key_list = loads(txn.get(f'_keys'.encode()))
+            except:
+                key_list = []
+            assert isinstance(key_list, list)
+            key_list.append(episode_key)
+            txn.put(f'_keys'.encode(), dumps(key_list))
         env.close()
         return True
     except:
@@ -84,8 +89,23 @@ def save_to_lmdb(records, data_dir):
         return False
 
 
-def load_from_lmdb(data_dir, episode_key):
-    # TODO: NOT READY
+def load_keys_from_lmdb(data_dir):
+    try:
+        env = lmdb.open(data_dir, map_size=int(1e12))  # Adjust map size as needed
+        with env.begin(write=True) as txn:
+            try:
+                key_list = loads(txn.get(f'_keys'.encode()))
+            except:
+                key_list = []
+            assert isinstance(key_list, list)
+        env.close()
+        return key_list
+    except:
+        traceback.print_exc()
+        return None
+
+
+def load_episode_from_lmdb(data_dir, episode_key):
     """
     Load records from an LMDB database for a specific episode.
 
@@ -149,3 +169,27 @@ def load_from_lmdb(data_dir, episode_key):
     except Exception as e:
         print(f"Error loading data: {e}")
         return None
+
+
+if __name__ == "__main__":
+    import rospy
+
+    rospy.init_node('lmdb_loader')
+
+    parser = argparse.ArgumentParser(description='LMDB Dataset Loader Test',
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--path', type=str, default="./dataset/",
+                        help='Path can be a rosbag file or a directory (recursively search).')
+    args = parser.parse_args()
+    data_dir: str = args.path
+    keys = load_keys_from_lmdb(data_dir)
+    all_results = [load_episode_from_lmdb(data_dir, key) for key in keys]
+    print(all_results)
+
+    rospy.loginfo(f"----- Starting to replay -----")
+    from data_collection.replay import display_sensor_data
+
+    for i, (full_file_name, results) in enumerate(all_results):
+        rospy.loginfo(f"Start to replay {full_file_name}...")
+        display_sensor_data(results)
+    rospy.loginfo(f"Finish all replay tasks...")
