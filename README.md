@@ -1,5 +1,10 @@
 # EDI ENV
 
+## Notice
+
+In the following part, if you are executing on *(pc@lab)*, you need not to
+run `source /home/pc/ediControler/catkin_ws/devel/setup.bash`
+
 ## Install (New)
 
 #### Compile ros rpc server call dependency.
@@ -57,6 +62,49 @@ export ROS_MASTER_URI=http://192.168.1.240:11311 # Do not Replace this one
 
 5. Run demo arm `python hardware/arm_demo.py`.
 
+## How to record
+
+1. **(New) Run `source /home/pc/ediControler/catkin_ws/devel/setup.bash`**
+
+2. Run recording program `python data_collection/bag_record.py`.
+
+```python
+if __name__ == "__main__":
+    start_record_service(None)
+    time.sleep(5)
+    end_record_service(None)
+    convert_thread.join()
+```
+
+Currently it will record a 5 seconds episode and convert it to lmdb datasets.
+
+### File Organization
+
+The dataset is organized into the following directory structure for efficient access and management:
+
+- `dataset/`
+    - `bag/`
+        - This directory contains the bag files. These are typically used for storing and transporting a collection of
+          files.
+    - `train_xxx_lmdb/`
+        - This directory contains the LMDB (Lightning Memory-Mapped Database) files for training. LMDB is used for its
+          high performance and efficiency in reading/writing large data sets.
+
+## How to replay
+
+Please check the python files for passing arguments.
+### Replaying rosbag file (experimental)
+
+1. **(New) Run `source /home/pc/ediControler/catkin_ws/devel/setup.bash`**
+
+2. Run `python data_collection/bag_loader.py`.
+
+### Replaying lmdb file (experimental)
+
+1. **(New) Run `source /home/pc/ediControler/catkin_ws/devel/setup.bash`**
+
+2. Run `python data_collection/lmdb_interface.py`.
+
 ## Run with Docker on *timetserver*
 
 To run in a docker container, you need to run
@@ -67,3 +115,6 @@ sudo docker run -it --rm --net=host --shm-size 32G \
 -v <your directory>:/workspace/<docker directory> \
 $CUDA edi/ros
 ```
+
+
+
