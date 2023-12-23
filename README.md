@@ -5,6 +5,12 @@
 In the following part, if you are executing on *(pc@lab)*, you need not to
 run `source /home/pc/ediControler/catkin_ws/devel/setup.bash`
 
+### TODO
+
+In the gym obs, keys are "status" and "images' (deprecated soon).
+
+In the lmdb dataset, keys are "status" and "sensors'.
+
 ## Install (New)
 
 #### Compile ros rpc server call dependency.
@@ -93,6 +99,7 @@ The dataset is organized into the following directory structure for efficient ac
 ## How to replay
 
 Please check the python files for passing arguments.
+
 ### Replaying rosbag file (experimental)
 
 1. **(New) Run `source /home/pc/ediControler/catkin_ws/devel/setup.bash`**
