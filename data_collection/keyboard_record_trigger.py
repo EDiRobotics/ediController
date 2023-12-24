@@ -1,6 +1,13 @@
 #!/usr/bin/python3
+import time
+
 import rospy
 from std_srvs.srv import Trigger
+
+last_end = time.time()
+last_press = time.time()
+wait_time_record = 1
+wait_time_press = 0.5
 
 
 def send_start_request():
@@ -22,6 +29,7 @@ def send_start_request():
 
 
 def send_end_request():
+    global last_end
     rospy.wait_for_service('/record/ctrl/end_record_srv')
     try:
         end_record = rospy.ServiceProxy('/record/ctrl/end_record_srv', Trigger)
@@ -32,6 +40,7 @@ def send_end_request():
             rospy.loginfo("Unable to stop recording: " + response.message)
     except rospy.ServiceException as e:
         rospy.logerr("Service call failed: " + str(e))
+    last_end = time.time()
 
 
 def set_ros_param():
@@ -45,6 +54,7 @@ def set_ros_param():
 
 
 def main():
+    global last_end, last_press
     rospy.init_node('record_control_client')
     rospy.loginfo("Record Control Client Started")
     tutorial = """
@@ -54,11 +64,27 @@ Press 's' to start recording, 'e' to end recording, 'p' to set param for \"/env/
 
     while not rospy.is_shutdown():
         command = input(">>> ")
+        if not time.time() - last_press > wait_time_press:
+            rospy.logwarn("Operation ignored: Please wait a moment before pressing again.")
+            time.sleep(0.2)
+            continue
+        last_press = time.time()
+
+        if not time.time() - last_end > wait_time_record:
+            rospy.logwarn("Operation ignored: Please wait a moment before recording again.")
+            time.sleep(0.5)
+            continue
+        if command == 'i' or command == '3':
+            if rospy.get_param('/record/ctrl/recording', False):
+                # if it is recording
+                command = '2'
+            else:
+                command = '1'
         if command == 's' or command == '1':
             send_start_request()
         elif command == 'e' or command == '2':
             send_end_request()
-        elif command == 'p' or command == '3':
+        elif command == 'p':
             set_ros_param()
         elif command == 'q':
             if rospy.get_param('/record/ctrl/recording', False):
