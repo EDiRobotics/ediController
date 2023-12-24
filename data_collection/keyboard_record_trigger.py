@@ -13,7 +13,8 @@ def send_start_request():
         start_record = rospy.ServiceProxy('/record/ctrl/start_record_srv', Trigger)
         response = start_record()
         if response.success:
-            rospy.loginfo("Recording started successfully.")
+            instruct = rospy.get_param('/env/info/instruct', "")
+            rospy.loginfo(f"Recording started successfully, current instruction is \"{instruct}\".")
         else:
             rospy.loginfo("Unable to start recording: " + response.message)
     except rospy.ServiceException as e:
@@ -34,7 +35,8 @@ def send_end_request():
 
 
 def set_ros_param():
-    param_value = input("Enter value to set for /env/info/instruct: ")
+    rospy.loginfo("Enter value to set for /env/info/instruct: ")
+    param_value = input(">>> ")
     rospy.set_param('/env/info/instruct', param_value)
     rospy.loginfo(f"Parameter /env/info/instruct set to: {param_value}")
 
@@ -48,9 +50,7 @@ Press 's' to start recording, 'e' to end recording, 'p' to set param for \"/env/
     rospy.loginfo(tutorial)
 
     while not rospy.is_shutdown():
-        instruct = rospy.get_param('/env/info/instruct', "")
-        rospy.loginfo(f"Current instruction is \"{instruct}\", please input your command:")
-        command = input("")
+        command = input(">>> ")
         if command == 's':
             send_start_request()
         elif command == 'e':

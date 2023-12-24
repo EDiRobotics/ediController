@@ -16,13 +16,16 @@ from std_srvs.srv import Trigger, TriggerResponse
 sys.path.append(".")
 from data_collection.bag_loader import record
 
-lmdb_save_path_is_fixed = True
+lmdb_save_path_is_fixed = False
+delete_bag = True
 
 rospy.init_node('record_bags')
 rospy.loginfo(f"[record] Initialize records node.")
 
 bag_save_base = f"dataset/bag"
 rospy.loginfo(f"[record] Rosbag save path is set to {bag_save_base}.")
+if not os.path.exists(bag_save_base):
+    os.makedirs(bag_save_base)
 
 datetime_start = datetime.datetime.now()
 datetime_start = datetime_start.strftime("%Y%m%d%H%M%S")
@@ -122,7 +125,7 @@ def convert():
             lmdb_save_path = f"dataset/train_{datetime_now}_lmdb"
         rospy.loginfo(f"[record] Get {bag_full_path}, start saving to {lmdb_save_path}...")
         try:
-            record(bag_full_path, lmdb_save_path=lmdb_save_path)
+            record(bag_full_path, lmdb_save_path=lmdb_save_path, delete_bag=delete_bag)
         except Exception as e:
             rospy.logerr(f"[record] Saving {bag_full_path} error: {e}...")
 
