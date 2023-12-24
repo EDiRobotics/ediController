@@ -38,7 +38,7 @@ def set_ros_param():
     rospy.loginfo("Enter value to set for /env/info/instruct: ")
     param_value = input(">>> ")
     if param_value.endswith("3"):
-        param_value.rstrip("3")
+        param_value = param_value.rstrip("3")
     rospy.set_param('/env/info/instruct', param_value)
     final_param_value = rospy.get_param('/env/info/instruct', "")
     rospy.loginfo(f"Parameter /env/info/instruct set to: {final_param_value}")
