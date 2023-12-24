@@ -51,7 +51,8 @@ def send_end_request():
 
 def set_ros_param():
     rospy.loginfo("Enter value to set for /env/info/instruct: ")
-    param_value = input(">>> ")
+    symbol = "(recording )>>> " if rospy.get_param('/record/ctrl/recording', False) else ">>> "
+    param_value = input(symbol)
     if param_value.endswith("3"):
         param_value = param_value.rstrip("3")
     rospy.set_param('/env/info/instruct', param_value)
@@ -121,7 +122,8 @@ def delete_bag():
             list_bag()
             rospy.loginfo("Enter 'q' to exit; Enter the index of the ROS bag to delete:")
             try:
-                num = input(">>> ")
+                symbol = "(recording )>>> " if rospy.get_param('/record/ctrl/recording', False) else ">>> "
+                num = input(symbol)
                 if num == "q":
                     return
                 index = int(num)
@@ -148,7 +150,8 @@ Input 'del' to enter into the delete program.
     rospy.loginfo(tutorial)
 
     while not rospy.is_shutdown():
-        command = input(">>> ")
+        symbol = "(recording )>>> " if rospy.get_param('/record/ctrl/recording', False) else ">>> "
+        command = input(symbol)
         if command == '':
             continue
 
