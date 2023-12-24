@@ -8,10 +8,36 @@ import rospy
 from std_srvs.srv import Trigger
 
 last_end = time.time() - 10
-last_press = time.time()
+last_press = time.time() - 10
 wait_time_record = 1
 wait_time_press = 0.5
 records_bag_full_path = []
+
+
+def load_mp3_files(resource_path="'resource'"):
+    mp3_mapping = {}
+    for file_name in os.listdir(resource_path):
+        if file_name.endswith('.mp3'):
+            base_name = os.path.splitext(file_name)[0]
+            full_path = os.path.join(resource_path, file_name)
+            mp3_mapping[base_name] = full_path
+            mp3_mapping[base_name.rstrip("_zh")] = full_path
+    return mp3_mapping
+
+
+def play_mp3(file_name):
+    if file_name in mp3_mapping:
+        file_path = mp3_mapping[file_name]
+        try:
+            os.system(f"play {file_path}")
+        except Exception as e:
+            rospy.logerr("Play mp3 failed: " + str(e))
+
+    else:
+        rospy.logerr(f"File '{file_name}' not found in the MP3s {mp3_mapping}.")
+
+
+mp3_mapping = load_mp3_files()
 
 
 def send_start_request():
@@ -24,6 +50,7 @@ def send_start_request():
         start_record = rospy.ServiceProxy('/record/ctrl/start_record_srv', Trigger)
         response = start_record()
         if response.success:
+            play_mp3("start")
             instruct = rospy.get_param('/env/info/instruct', "")
             rospy.loginfo(f"Recording started successfully, current instruction is \"{instruct}\".")
         else:
@@ -39,6 +66,7 @@ def send_end_request():
         end_record = rospy.ServiceProxy('/record/ctrl/end_record_srv', Trigger)
         response = end_record()
         if response.success:
+            play_mp3("stop")
             bag_full_path = response.message
             records_bag_full_path.append(bag_full_path)
             rospy.loginfo(f"Recording stopped successfully, save to {bag_full_path}.")
