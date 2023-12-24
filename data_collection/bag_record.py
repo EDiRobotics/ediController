@@ -114,7 +114,6 @@ def convert():
             time.sleep(.1)
             # rospy.loginfo(f"[record] Queue is empty, waiting for rosbag.")
             continue
-        rospy.loginfo(f"[record] Queue is not empty.")
         bag_full_path = save_queue.get()
 
         datetime_now = datetime.datetime.now()
