@@ -34,6 +34,8 @@ meta = {"datetime": datetime_start}
 lmdb_save_path = f"dataset/train_{datetime_start}_lmdb"
 if lmdb_save_path_is_fixed:
     rospy.loginfo(f"[record] LMDB save path is fixed, set to {lmdb_save_path}.")
+else:
+    rospy.loginfo(f"[record] LMDB save path is not fixed.")
 
 current_process = None
 current_bag_full_path = None

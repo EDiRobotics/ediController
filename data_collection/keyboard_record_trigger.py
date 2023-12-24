@@ -37,8 +37,11 @@ def send_end_request():
 def set_ros_param():
     rospy.loginfo("Enter value to set for /env/info/instruct: ")
     param_value = input(">>> ")
+    if param_value.endswith("3"):
+        param_value.rstrip("3")
     rospy.set_param('/env/info/instruct', param_value)
-    rospy.loginfo(f"Parameter /env/info/instruct set to: {param_value}")
+    final_param_value = rospy.get_param('/env/info/instruct', "")
+    rospy.loginfo(f"Parameter /env/info/instruct set to: {final_param_value}")
 
 
 def main():
@@ -51,11 +54,11 @@ Press 's' to start recording, 'e' to end recording, 'p' to set param for \"/env/
 
     while not rospy.is_shutdown():
         command = input(">>> ")
-        if command == 's':
+        if command == 's' or command == '1':
             send_start_request()
-        elif command == 'e':
+        elif command == 'e' or command == '2':
             send_end_request()
-        elif command == 'p':
+        elif command == 'p' or command == '3':
             set_ros_param()
         elif command == 'q':
             rospy.loginfo("Exiting.")
