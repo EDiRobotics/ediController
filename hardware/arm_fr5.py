@@ -98,7 +98,7 @@ class FR5:
                 p1 = self.robot.GetForwardKin(j1)[1:]
                 e_p1 = [0.000, 0.000, 0.000, 0.000]
                 d_p1 = [1.000, 1.000, 1.000, 1.000, 1.000, 1.000]
-                print(f"Debug: [move_joint] move joint to {joint}, P1 {p1}.")
+                # print(f"Debug: [move_joint] move joint to {joint}, P1 {p1}.")
                 self._first = False
                 self._lastHandlerJoint = joint
                 return self.robot.MoveJ(j1, p1, 1, 0, 100.0, 180.0, 100.0, e_p1, -1.0, 0, d_p1)

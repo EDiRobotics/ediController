@@ -16,14 +16,21 @@ from std_srvs.srv import Trigger, TriggerResponse
 sys.path.append(".")
 from data_collection.bag_loader import record
 
+lmdb_save_path_is_fixed = True
+
+rospy.init_node('record_bags')
+rospy.loginfo(f"[record] Initialize records node.")
+
+bag_save_base = f"dataset/bag"
+rospy.loginfo(f"[record] Rosbag save path is set to {bag_save_base}.")
+
 datetime_start = datetime.datetime.now()
 datetime_start = datetime_start.strftime("%Y%m%d%H%M%S")
 meta = {"datetime": datetime_start}
 
-rospy.init_node('record_bags')
-bag_save_base = f"dataset/bag"
 lmdb_save_path = f"dataset/train_{datetime_start}_lmdb"
-rospy.loginfo(f"[recordh] Init records node, lmdb save path is {lmdb_save_path}")
+if lmdb_save_path_is_fixed:
+    rospy.loginfo(f"[record] LMDB save path is fixed, set to {lmdb_save_path}.")
 
 current_process = None
 current_bag_full_path = None
@@ -100,22 +107,21 @@ def end_record(process: subprocess.Popen, bag_full_path: str):
     time.sleep(1)
 
 
-# start_service = rospy.Service('/record/ctrl/start_record_srv', Trigger, start_record_service)
-# end_service = rospy.Service('/record/ctrl/end_record_srv', Trigger, end_record_service)
-#
-# rospy.spin()
-
-
 def convert():
     while not rospy.is_shutdown():
-        global save_queue
+        global save_queue, lmdb_save_path
         if save_queue.empty():
             time.sleep(.1)
             # rospy.loginfo(f"[record] Queue is empty, waiting for rosbag.")
             continue
         rospy.loginfo(f"[record] Queue is not empty.")
         bag_full_path = save_queue.get()
-        rospy.loginfo(f"[record] Get {bag_full_path}, start saving to lmdb...")
+
+        datetime_now = datetime.datetime.now()
+        datetime_now = datetime_now.strftime("%Y%m%d%H%M%S")
+        if not lmdb_save_path_is_fixed:
+            lmdb_save_path = f"dataset/train_{datetime_now}_lmdb"
+        rospy.loginfo(f"[record] Get {bag_full_path}, start saving to {lmdb_save_path}...")
         try:
             record(bag_full_path, lmdb_save_path=lmdb_save_path)
         except Exception as e:
@@ -125,8 +131,13 @@ def convert():
 convert_thread = threading.Thread(target=convert)
 convert_thread.start()
 
-if __name__ == "__main__":
-    start_record_service(None)
-    time.sleep(5)
-    end_record_service(None)
-    convert_thread.join()
+start_service = rospy.Service('/record/ctrl/start_record_srv', Trigger, start_record_service)
+end_service = rospy.Service('/record/ctrl/end_record_srv', Trigger, end_record_service)
+rospy.spin()
+convert_thread.join()
+
+# if __name__ == "__main__":
+#     start_record_service(None)
+#     time.sleep(5)
+#     end_record_service(None)
+#     convert_thread.join()
