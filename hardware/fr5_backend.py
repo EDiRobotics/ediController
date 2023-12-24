@@ -19,6 +19,7 @@ except Exception as e:
 
 topic_name = "/arm_status/gripper_pos"
 publisher_gripper = rospy.Publisher(topic_name, Float32, queue_size=5)
+last_action = time.time()
 
 
 def step_with_action(action):
@@ -27,12 +28,16 @@ def step_with_action(action):
     the last item contains the gripper proportion.
     :return: a dict containing some information
     """
+    global last_action
     # action = cls._action_chunk(action)
     action = [float(a) for a in action]
     joint = action[:6]
     gripper = action[-1]
     publisher_gripper.publish(gripper)
     # real env step
+    if time.time() - last_action > 1:
+        robot_controller.reset_first()
+    last_action = time.time()
     retJ = robot_controller.move_joint(joint)
     retG = robot_controller.set_gripper(gripper)
     err, errors = robot_controller.detect_errors()
