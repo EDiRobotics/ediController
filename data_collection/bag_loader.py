@@ -124,7 +124,9 @@ def load_from_bag(file_name, config=None):
     instruct_param = "/env/info/instruct"
     if instruct_param in params:
         instruct = params[instruct_param]
-    results = {"base_timestamp": base_timestamp, "records": results,
+
+    duration = float(results[-1]["action_timestamp"]) - float(results[0]["obs_timestamp"])
+    results = {"base_timestamp": base_timestamp, "records": results, "duration": duration,
                "max_step": len(results), "instruct": instruct, "params": params}
     results.update(config)
     return results
@@ -168,7 +170,6 @@ def record(input_path, lmdb_save_path=None, delete_bag=False, cover_exist=False)
 
         if "save_path" not in meta_data or cover_exist:
             results = load_from_bag(full_file_name, config=meta_data)
-            all_results.append((full_file_name, results))
             success = save_to_lmdb(results, lmdb_save_path)
             if not success:
                 rospy.logerr(f"Error occurs when dumping {full_file_name}!")
@@ -177,8 +178,11 @@ def record(input_path, lmdb_save_path=None, delete_bag=False, cover_exist=False)
             if lmdb_save_path is not None:
                 absolute_lmdb_save_path = os.path.abspath(lmdb_save_path)
                 meta_data["save_path"] = absolute_lmdb_save_path
+                meta_data["duration"] = results["duration"]
                 with open(json_full_name, 'w') as file:
                     json.dump(meta_data, file, indent=4)
+
+            all_results.append((full_file_name, results))
         else:
             rospy.logwarn(f"[loader] <{i}/{len(file_list)}> Pass {full_file_name} because save_path exists...")
 
@@ -205,7 +209,13 @@ if __name__ == "__main__":
                         help='Path can be a rosbag file or a directory (recursively search).')
     parser.add_argument('--delete_bag', default=False, action='store_true',
                         help='Whether to delete the original rosbag file, default is False')
+    parser.add_argument('--display_image', '-i', type=bool, default=False, action='store_true',
+                        help='Replay image with cv2')
+    parser.add_argument('--display_action', '-a', type=bool, default=False, action='store_true',
+                        help='Replay action')
     args = parser.parse_args()
+    display_image = args.display_image
+    display_action = args.display_action
 
     input_path: str = args.path
     delete_bag: bool = args.delete_bag
@@ -216,5 +226,6 @@ if __name__ == "__main__":
 
     for i, (full_file_name, results) in enumerate(all_results):
         rospy.loginfo(f"Start to replay {full_file_name}...")
-        display_sensor_data(results)
+        display_sensor_data(results, display_image=display_image, display_action=display_action)
+
     rospy.loginfo(f"Finish all replay tasks...")

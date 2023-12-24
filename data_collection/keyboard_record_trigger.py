@@ -65,8 +65,22 @@ def list_bag():
         rospy.loginfo("No ROS bags available.")
         return
 
-    bags_info = "Available ROS bags (only this life cycle is supported now):\n"
-    bags_info += "\n".join(f"{i}: {bag_path}" for i, bag_path in enumerate(records_bag_full_path))
+    bags_info = "Available ROS bags:\n"
+    for i, bag_path in enumerate(records_bag_full_path):
+        bag_directory = os.path.dirname(bag_path)
+        json_full_name = os.path.join(bag_directory, 'meta.json')
+        duration = "Unknown"
+
+        if os.path.exists(json_full_name):
+            with open(json_full_name, 'r') as file:
+                try:
+                    meta_data = json.load(file)
+                    duration = meta_data.get("duration", "Unknown")
+                    duration = round(float(duration), 3)
+                except Exception as e:
+                    rospy.logwarn(f"Unable to read duration from {json_full_name}: {e}")
+
+        bags_info += f"[{i}]: {bag_path}, Duration: {duration}s\n"
 
     rospy.loginfo(bags_info)
 
@@ -110,7 +124,7 @@ def delete_bag():
     rospy.loginfo(f"Getting into deleting program...\n")
     if fixed_lmdb:
         rospy.logwarn(f"The value of '/record/ctrl/fixed_lmdb' is set to True.")
-        rospy.logwarn(f"Finding itmes in the unified lmdb dataset is not supported now.")
+        rospy.logwarn(f"Finding items in the unified lmdb dataset is not supported now.")
         rospy.logwarn(f"The delete behavior will only delete rosbag file and not affect items in lmdb.")
 
     while not rospy.is_shutdown():

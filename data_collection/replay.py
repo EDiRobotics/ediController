@@ -29,7 +29,7 @@ def execute_action(action):
         rospy.logerr(f"Request action return errors: {response.message}")
 
 
-def display_sensor_data(results, display_image=False):
+def display_sensor_data(results, display_image=False, display_action=False):
     original_state = rospy.get_param("/env/ctrl/switch", None)
     rospy.set_param("/env/ctrl/switch", "replay")
     if "episode" in results:
@@ -61,7 +61,9 @@ def display_sensor_data(results, display_image=False):
         adjusted_act_timestamp = action_timestamp + time_offset
         if rospy.Time.now() < adjusted_act_timestamp:
             rospy.sleep(adjusted_act_timestamp - rospy.Time.now())
-        execute_action(action)
+
+        if display_action:
+            execute_action(action)
 
     cv2.destroyAllWindows()
     rospy.set_param("/env/ctrl/switch", original_state)

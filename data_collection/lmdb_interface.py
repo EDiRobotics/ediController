@@ -257,7 +257,13 @@ if __name__ == "__main__":
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--path', type=str, default="./dataset/test",
                         help='Path can be a rosbag file or a directory (recursively search).')
+    parser.add_argument('--display_image', '-i', type=bool, default=False, action='store_true',
+                        help='Replay image with cv2')
+    parser.add_argument('--display_action', '-a', type=bool, default=False, action='store_true',
+                        help='Replay action')
     args = parser.parse_args()
+    display_image = args.display_image
+    display_action = args.display_action
     lmdb_directory: str = args.path
     keys = load_keys_from_lmdb(lmdb_directory)
     all_results = [(key, load_episode_from_lmdb(lmdb_directory, key)) for key in keys]
@@ -271,5 +277,5 @@ if __name__ == "__main__":
 
     for i, (full_file_name, results) in enumerate(all_results):
         rospy.loginfo(f"Start to replay {full_file_name}...")
-        display_sensor_data(results)
+        display_sensor_data(results, display_image=display_image, display_action=display_action)
     rospy.loginfo(f"Finish all replay tasks...")
