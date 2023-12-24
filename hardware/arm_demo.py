@@ -195,11 +195,11 @@ def JointsMap(handlerJoints):
 armINNFO = ArmINNFO()
 
 time.sleep(1.5)
-handlerJoints = armINNFO.GetServoDegree();
+handlerJoints = armINNFO.GetServoDegree()
 time.sleep(0.5)
-handlerJoints = armINNFO.GetServoDegree();
+handlerJoints = armINNFO.GetServoDegree()
 time.sleep(0.1)
-handlerJoints = armINNFO.GetServoDegree();
+handlerJoints = armINNFO.GetServoDegree()
 
 print("INNFO initialize finished.", handlerJoints)
 handlerJoints = armINNFO.GetServoDegree()

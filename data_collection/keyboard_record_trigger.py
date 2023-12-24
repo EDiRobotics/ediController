@@ -156,7 +156,7 @@ def delete_bag():
         rospy.logwarn(f"The delete behavior will only delete rosbag file and not affect items in lmdb.")
 
     while not rospy.is_shutdown():
-
+        index = -1
         while not rospy.is_shutdown():
             if not records_bag_full_path:
                 rospy.loginfo("Records is empty now, returning to main process...\n")
@@ -174,6 +174,7 @@ def delete_bag():
                 break
             except ValueError:
                 rospy.logerr("Invalid index entered. Please enter a valid numerical index.")
+                continue
         delete_with_index(index)
 
 

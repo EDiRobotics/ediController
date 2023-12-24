@@ -29,7 +29,6 @@ def step_with_action(action):
     :return: a dict containing some information
     """
     global last_action
-    # action = cls._action_chunk(action)
     action = [float(a) for a in action]
     joint = action[:6]
     gripper = action[-1]

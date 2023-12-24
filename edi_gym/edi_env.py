@@ -19,7 +19,7 @@ except:
 
 class EdiEnv:
     demo = False
-    _action_chunk = False
+    _use_action_chunk = False
 
     def __init__(self, demo=False) -> None:
         super(EdiEnv, self).__init__()
@@ -142,7 +142,8 @@ class EdiEnv:
         the last item contains the gripper proportion.
         :return: a dict containing some information
         """
-        # action = cls._action_chunk(action)
+        if cls._use_action_chunk:
+            action = cls._action_chunk(action)
         action = [float(a) for a in action]
         step_action_info = execute_action(action, demo=cls.demo)
         return step_action_info
