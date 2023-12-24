@@ -1,4 +1,4 @@
-# EDI ENV
+# EDI Ros 0Pipeline
 
 ## Notice
 
@@ -72,17 +72,15 @@ export ROS_MASTER_URI=http://192.168.1.240:11311 # Do not Replace this one
 
 1. **(New) Run `source /home/pc/ediControler/catkin_ws/devel/setup.bash`**
 
-2. Run recording program `python data_collection/bag_record.py`.
+2. Run **recording backend**  `python data_collection/bag_record.py`.
 
-```python
-if __name__ == "__main__":
-    start_record_service(None)
-    time.sleep(5)
-    end_record_service(None)
-    convert_thread.join()
-```
+    - This command initiates a background data collection program. In the script, you can modify two parameters: `lmdb_save_path_is_fixed` and `delete_bag`.
+        - `lmdb_save_path_is_fixed`: If set to `True`, all episodes from this session will be stored in a single database directory. If set to `False`, a new database directory will be created for each episode.
+        - `delete_bag`: This parameter determines whether the recorded rosbag files are deleted.
 
-Currently it will record a 5 seconds episode and convert it to lmdb datasets.
+3. Run recording frontend (keyboard input) `python data_collection/keyboard_record_trigger.py`.
+
+***Recording backend will be integrated to `start_publishing.sh` in the future***.
 
 ### File Organization
 
