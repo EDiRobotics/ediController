@@ -33,8 +33,10 @@ meta = {"datetime": datetime_start}
 
 lmdb_save_path = f"dataset/train_{datetime_start}_lmdb"
 if lmdb_save_path_is_fixed:
+    rospy.set_param('/record/ctrl/fixed_lmdb', True)
     rospy.loginfo(f"[record] LMDB save path is fixed, set to {lmdb_save_path}.")
 else:
+    rospy.set_param('/record/ctrl/fixed_lmdb', False)
     rospy.loginfo(f"[record] LMDB save path is not fixed.")
 
 current_process = None
@@ -57,7 +59,7 @@ def start_record_service(req):
         current_bag_full_path = os.path.join(dir_name, bag_name)
         rospy.set_param('/record/ctrl/save_directory', dir_name)
         current_process = start_record(current_bag_full_path)
-        return TriggerResponse(success=True, message="Recording started.")
+        return TriggerResponse(success=True, message=current_bag_full_path)
     else:
         return TriggerResponse(success=False, message="Recording is already running.")
 
@@ -67,7 +69,7 @@ def end_record_service(req):
     if current_process is not None:
         end_record(current_process, current_bag_full_path)
         current_process = None
-        return TriggerResponse(success=True, message="Recording stopped.")
+        return TriggerResponse(success=True, message=os.path.abspath(current_bag_full_path))
     else:
         return TriggerResponse(success=False, message="No recording is currently running.")
 
@@ -120,6 +122,7 @@ def convert():
             # rospy.loginfo(f"[record] Queue is empty, waiting for rosbag.")
             continue
         bag_full_path = save_queue.get()
+        dir_name, _ = os.path.split(bag_full_path)
 
         datetime_now = datetime.datetime.now()
         datetime_now = datetime_now.strftime("%Y%m%d%H%M%S")

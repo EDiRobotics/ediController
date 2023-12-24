@@ -1,13 +1,17 @@
 #!/usr/bin/python3
+import json
+import os
+import shutil
 import time
 
 import rospy
 from std_srvs.srv import Trigger
 
-last_end = time.time()
+last_end = time.time() - 10
 last_press = time.time()
 wait_time_record = 1
 wait_time_press = 0.5
+records_bag_full_path = []
 
 
 def send_start_request():
@@ -35,7 +39,9 @@ def send_end_request():
         end_record = rospy.ServiceProxy('/record/ctrl/end_record_srv', Trigger)
         response = end_record()
         if response.success:
-            rospy.loginfo("Recording stopped successfully.")
+            bag_full_path = response.message
+            records_bag_full_path.append(bag_full_path)
+            rospy.loginfo(f"Recording stopped successfully, save to {bag_full_path}.")
         else:
             rospy.loginfo("Unable to stop recording: " + response.message)
     except rospy.ServiceException as e:
@@ -53,6 +59,72 @@ def set_ros_param():
     rospy.loginfo(f"Parameter /env/info/instruct set to: {final_param_value}")
 
 
+def list_bag():
+    if not records_bag_full_path:
+        rospy.loginfo("No ROS bags available.")
+        return
+
+    bags_info = "Available ROS bags:\n"
+    bags_info += "\n".join(f"{i}: {bag_path}" for i, bag_path in enumerate(records_bag_full_path))
+
+    rospy.loginfo(bags_info)
+
+
+def delete_bag():
+    if not records_bag_full_path:
+        rospy.logwarn("No ROS bags available for deletion.")
+        return
+    fixed_lmdb = rospy.get_param('/record/ctrl/fixed_lmdb', False)
+    if fixed_lmdb:
+        rospy.logwarn(f"The value of '/record/ctrl/fixed_lmdb' is set to True.")
+        rospy.logwarn(f"Finding itmes in the unified lmdb dataset is not supported now.")
+        rospy.logwarn(f"The delete behavior will only delete rosbag file and not affect items in lmdb.")
+
+    while not rospy.is_shutdown():
+
+        while not rospy.is_shutdown():
+            if not records_bag_full_path:
+                rospy.loginfo("Records is empty now, returning to main process...\n")
+                return
+            list_bag()
+            rospy.loginfo("Enter 'q' to exit; Enter the index of the ROS bag to delete:")
+            try:
+                num = input(">>> ")
+                if num == "q":
+                    return
+                index = int(num)
+                if index < 0 or index >= len(records_bag_full_path):
+                    raise ValueError
+                break
+            except ValueError:
+                rospy.logerr("Invalid index entered. Please enter a valid numerical index.")
+
+        bag_full_path = records_bag_full_path[index]
+        bag_directory = os.path.dirname(bag_full_path)
+        json_full_name = os.path.join(bag_directory, 'meta.json')
+
+        try:
+            with open(json_full_name, 'r') as file:
+                meta_data = json.load(file)
+            save_path = meta_data.get("save_path")
+
+            if fixed_lmdb and save_path and os.path.exists(save_path):
+                rospy.logerr(
+                    f"Deletion of save path '{save_path}' is not permitted as '/record/ctrl/fixed_lmdb' is set to True.")
+            elif save_path and os.path.exists(save_path):
+                shutil.rmtree(save_path)
+                rospy.loginfo(f"Associated save path '{save_path}' has been successfully deleted.")
+        except Exception as e:
+            rospy.logwarn(f"Error encountered while handling save path: {e}")
+
+        try:
+            shutil.rmtree(bag_directory)
+            records_bag_full_path.pop(index)
+            rospy.loginfo(f"ROS bag directory '{bag_directory}' has been successfully deleted.\n")
+        except Exception as e:
+            rospy.logerr(f"Error encountered while deleting ROS bag directory: {e}")
+
+
 def main():
     global last_end, last_press
     rospy.init_node('record_control_client')
@@ -64,6 +136,9 @@ Press 's' to start recording, 'e' to end recording, 'p' to set param for \"/env/
 
     while not rospy.is_shutdown():
         command = input(">>> ")
+        if command == '':
+            continue
+
         if not time.time() - last_press > wait_time_press:
             rospy.logwarn("Operation ignored: Please wait a moment before pressing again.")
             time.sleep(0.2)
@@ -74,19 +149,25 @@ Press 's' to start recording, 'e' to end recording, 'p' to set param for \"/env/
             rospy.logwarn("Operation ignored: Please wait a moment before recording again.")
             time.sleep(0.5)
             continue
-        if command == 'i' or command == '3':
+        if command == 'i' or command == '1':
             if rospy.get_param('/record/ctrl/recording', False):
                 # if it is recording
-                command = '2'
+                command = '3'
             else:
-                command = '1'
-        if command == 's' or command == '1':
+                command = '2'
+
+        if command == 's' or command == '2':
             send_start_request()
-        elif command == 'e' or command == '2':
+        elif command == 'e' or command == '3':
             send_end_request()
         elif command == 'p':
             set_ros_param()
-        elif command == 'q':
+        elif command == 'ls':
+            list_bag()
+        elif command == 'del':
+            rospy.loginfo(f"Getting into deleting program...\n")
+            delete_bag()
+        elif 'q' in command:
             if rospy.get_param('/record/ctrl/recording', False):
                 rospy.logerr("Cannot exit while recording is in progress.")
             else:
