@@ -70,11 +70,43 @@ def list_bag():
     rospy.loginfo(bags_info)
 
 
+def delete_with_index(index):
+    try:
+        bag_full_path = records_bag_full_path[index]
+    except Exception as e:
+        rospy.logwarn(f"Index is not valid.")
+        return
+
+    bag_directory = os.path.dirname(bag_full_path)
+    json_full_name = os.path.join(bag_directory, 'meta.json')
+
+    try:
+        with open(json_full_name, 'r') as file:
+            meta_data = json.load(file)
+        save_path = meta_data.get("save_path")
+
+        if fixed_lmdb and save_path and os.path.exists(save_path):
+            rospy.logerr(
+                f"Deletion of save path '{save_path}' is not permitted as '/record/ctrl/fixed_lmdb' is set to True.")
+        elif save_path and os.path.exists(save_path):
+            shutil.rmtree(save_path)
+            rospy.loginfo(f"Associated save path '{save_path}' has been successfully deleted.")
+    except Exception as e:
+        rospy.logwarn(f"Error encountered while handling save path: {e}")
+
+    try:
+        shutil.rmtree(bag_directory)
+        records_bag_full_path.pop(index)
+        rospy.loginfo(f"ROS bag directory '{bag_directory}' has been successfully deleted.\n")
+    except Exception as e:
+        rospy.logerr(f"Error encountered while deleting ROS bag directory: {e}")
+
+
 def delete_bag():
     if not records_bag_full_path:
         rospy.logwarn("No ROS bags available for deletion.")
         return
-    fixed_lmdb = rospy.get_param('/record/ctrl/fixed_lmdb', False)
+    rospy.loginfo(f"Getting into deleting program...\n")
     if fixed_lmdb:
         rospy.logwarn(f"The value of '/record/ctrl/fixed_lmdb' is set to True.")
         rospy.logwarn(f"Finding itmes in the unified lmdb dataset is not supported now.")
@@ -98,31 +130,7 @@ def delete_bag():
                 break
             except ValueError:
                 rospy.logerr("Invalid index entered. Please enter a valid numerical index.")
-
-        bag_full_path = records_bag_full_path[index]
-        bag_directory = os.path.dirname(bag_full_path)
-        json_full_name = os.path.join(bag_directory, 'meta.json')
-
-        try:
-            with open(json_full_name, 'r') as file:
-                meta_data = json.load(file)
-            save_path = meta_data.get("save_path")
-
-            if fixed_lmdb and save_path and os.path.exists(save_path):
-                rospy.logerr(
-                    f"Deletion of save path '{save_path}' is not permitted as '/record/ctrl/fixed_lmdb' is set to True.")
-            elif save_path and os.path.exists(save_path):
-                shutil.rmtree(save_path)
-                rospy.loginfo(f"Associated save path '{save_path}' has been successfully deleted.")
-        except Exception as e:
-            rospy.logwarn(f"Error encountered while handling save path: {e}")
-
-        try:
-            shutil.rmtree(bag_directory)
-            records_bag_full_path.pop(index)
-            rospy.loginfo(f"ROS bag directory '{bag_directory}' has been successfully deleted.\n")
-        except Exception as e:
-            rospy.logerr(f"Error encountered while deleting ROS bag directory: {e}")
+        delete_with_index(index)
 
 
 def main():
@@ -134,7 +142,7 @@ Press 'q' to quit,
 Press 'r' to start or end recording (Pedal 1, intelligent), 
 Press 's' to start recording, 'e' to end recording, 
 Press 'p' to set param for \"/env/info/instruct\",
-Input 'ls' to list the records (Pedal 3) (only this life cycle is supported now),
+Input 'ls' to list the records (Pedal 2) (only this life cycle is supported now),
 Input 'del' to enter into the delete program.
 """
     rospy.loginfo(tutorial)
@@ -161,8 +169,10 @@ Input 'del' to enter into the delete program.
                 command = 'e'
             else:
                 command = 's'
-        elif command == "3":
+        elif command == "2":
             command = 'ls'
+        elif command == "3":
+            command = 'del last'
 
         if command == 's':
             send_start_request()
@@ -173,8 +183,13 @@ Input 'del' to enter into the delete program.
         elif command == 'ls':
             list_bag()
         elif command == 'del':
-            rospy.loginfo(f"Getting into deleting program...\n")
             delete_bag()
+        elif command == 'del last':
+            if len(records_bag_full_path) > 0:
+                rospy.loginfo(f"Deleting last...\n")
+                delete_with_index(-1)
+            else:
+                rospy.logwarn("No ROS bags available for deletion.")
         elif 'q' in command:
             if rospy.get_param('/record/ctrl/recording', False):
                 rospy.logerr("Cannot exit while recording is in progress.")
@@ -187,4 +202,5 @@ Input 'del' to enter into the delete program.
 
 
 if __name__ == '__main__':
+    fixed_lmdb = rospy.get_param('/record/ctrl/fixed_lmdb', False)
     main()

@@ -158,7 +158,7 @@ def fr5():
     try:
         myRobot = FR5('192.168.1.10')
     except:
-        exit("Can not connect to robot!")
+        exit("Can not connect to robot, exiting!")
     return myRobot
     # raise NotImplementedError
 

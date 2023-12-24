@@ -209,6 +209,7 @@ begin_time = time.time()
 print("start the joints loop at: ", begin_time)
 
 env = EdiEnv(demo=True)
+env.reset()
 rospy.set_param("/env/ctrl/switch", "demo")
 
 while not rospy.is_shutdown():
