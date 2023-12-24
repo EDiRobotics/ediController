@@ -61,8 +61,11 @@ Press 's' to start recording, 'e' to end recording, 'p' to set param for \"/env/
         elif command == 'p' or command == '3':
             set_ros_param()
         elif command == 'q':
-            rospy.loginfo("Exiting.")
-            break
+            if rospy.get_param('/record/ctrl/recording', False):
+                rospy.logerr("Cannot exit while recording is in progress.")
+            else:
+                rospy.loginfo("Exiting.")
+                break
         else:
             rospy.logerr("Invalid command.")
             rospy.loginfo(tutorial)
