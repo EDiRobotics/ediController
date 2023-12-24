@@ -64,7 +64,7 @@ def list_bag():
         rospy.loginfo("No ROS bags available.")
         return
 
-    bags_info = "Available ROS bags:\n"
+    bags_info = "Available ROS bags (only this life cycle is supported now):\n"
     bags_info += "\n".join(f"{i}: {bag_path}" for i, bag_path in enumerate(records_bag_full_path))
 
     rospy.loginfo(bags_info)
@@ -130,7 +130,12 @@ def main():
     rospy.init_node('record_control_client')
     rospy.loginfo("Record Control Client Started")
     tutorial = """
-Press 's' to start recording, 'e' to end recording, 'p' to set param for \"/env/info/instruct\", and 'q' to quit.
+Press 'q' to quit, 
+Press 'r' to start or end recording (Pedal 1, intelligent), 
+Press 's' to start recording, 'e' to end recording, 
+Press 'p' to set param for \"/env/info/instruct\",
+Input 'ls' to list the records (Pedal 3) (only this life cycle is supported now),
+Input 'del' to enter into the delete program.
 """
     rospy.loginfo(tutorial)
 
@@ -149,16 +154,19 @@ Press 's' to start recording, 'e' to end recording, 'p' to set param for \"/env/
             rospy.logwarn("Operation ignored: Please wait a moment before recording again.")
             time.sleep(0.5)
             continue
-        if command == 'i' or command == '1':
+
+        if command == 'r' or command == '1':
             if rospy.get_param('/record/ctrl/recording', False):
                 # if it is recording
-                command = '3'
+                command = 'e'
             else:
-                command = '2'
+                command = 's'
+        elif command == "3":
+            command = 'ls'
 
-        if command == 's' or command == '2':
+        if command == 's':
             send_start_request()
-        elif command == 'e' or command == '3':
+        elif command == 'e':
             send_end_request()
         elif command == 'p':
             set_ros_param()
