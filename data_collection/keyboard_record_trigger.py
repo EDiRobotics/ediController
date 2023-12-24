@@ -48,7 +48,8 @@ Press 's' to start recording, 'e' to end recording, 'p' to set param for \"/env/
     rospy.loginfo(tutorial)
 
     while not rospy.is_shutdown():
-        rospy.loginfo("Please input your command:")
+        instruct = rospy.get_param('/env/info/instruct', "")
+        rospy.loginfo(f"Current instruction is \"{instruct}\", please input your command:")
         command = input("")
         if command == 's':
             send_start_request()
@@ -62,7 +63,6 @@ Press 's' to start recording, 'e' to end recording, 'p' to set param for \"/env/
         else:
             rospy.logerr("Invalid command.")
             rospy.loginfo(tutorial)
-
 
 
 if __name__ == '__main__':
