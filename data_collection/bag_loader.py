@@ -209,9 +209,9 @@ if __name__ == "__main__":
                         help='Path can be a rosbag file or a directory (recursively search).')
     parser.add_argument('--delete_bag', default=False, action='store_true',
                         help='Whether to delete the original rosbag file, default is False')
-    parser.add_argument('--display_image', '-i', type=bool, default=False, action='store_true',
+    parser.add_argument('--display_image', '-i', action='store_true',
                         help='Replay image with cv2')
-    parser.add_argument('--display_action', '-a', type=bool, default=False, action='store_true',
+    parser.add_argument('--display_action', '-a', action='store_true',
                         help='Replay action')
     args = parser.parse_args()
     display_image = args.display_image

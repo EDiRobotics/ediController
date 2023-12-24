@@ -11,12 +11,6 @@ from cv_bridge import CvBridge, CvBridgeError
 
 bridge = CvBridge()
 
-service = '/env/step/replay_action_srv'
-rospy.loginfo(f"[replay] Waiting for server {service} to be ready...")
-rospy.wait_for_service(service)
-action_service = rospy.ServiceProxy(service, StringService)
-rospy.loginfo(f"[replay] Server {service} is ready...")
-
 
 def execute_action(action):
     if isinstance(action, np.ndarray):
@@ -24,6 +18,9 @@ def execute_action(action):
     action_json = json.dumps(action)
     request = StringServiceRequest(action_json)
     rospy.logdebug(f"Request action: {action_json}")
+    service = '/env/step/replay_action_srv'
+    rospy.wait_for_service(service)
+    action_service = rospy.ServiceProxy(service, StringService)
     response = action_service(request)
     if not response.success:
         rospy.logerr(f"Request action return errors: {response.message}")
@@ -66,4 +63,5 @@ def display_sensor_data(results, display_image=False, display_action=False):
             execute_action(action)
 
     cv2.destroyAllWindows()
+    time.sleep(0.5)
     rospy.set_param("/env/ctrl/switch", original_state)

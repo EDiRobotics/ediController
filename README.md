@@ -102,13 +102,13 @@ Please check the python files for passing arguments.
 
 1. **(New) Run `source /home/pc/ediControler/catkin_ws/devel/setup.bash`**
 
-2. Run `python data_collection/bag_loader.py`.
+2. Run `python data_collection/bag_loader.py -i -a `.
 
 ### Replaying lmdb file (experimental)
 
 1. **(New) Run `source /home/pc/ediControler/catkin_ws/devel/setup.bash`**
 
-2. Run `python data_collection/lmdb_interface.py`.
+2. Run `python data_collection/lmdb_interface.py -i -a `.
 
 ## Run with Docker on *timetserver*
 
