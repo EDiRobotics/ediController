@@ -9,12 +9,14 @@ from torch.utils.data import Dataset
 from torchvision.io import encode_jpeg, decode_jpeg, encode_png, decode_png
 
 
-def save_to_lmdb(records, lmdb_directory):
+def save_to_lmdb(results, lmdb_directory):
     """
-    records:
+    results:
     {
         "episode": 20231219153942001,
         "base_timestamp": 1703088159.7284524,
+        "instruct": "reach red",
+        "params": {...},
         "records": [
             {
                 "action": [23.0, -113.0, -102.0, -54.0, 90.0, -170.0],
@@ -38,23 +40,25 @@ def save_to_lmdb(records, lmdb_directory):
 
     if not os.path.exists(lmdb_directory):
         os.makedirs(lmdb_directory)
-
+    assert isinstance(results, dict)
+    results.setdefault("instruct", "")
     try:
         env = lmdb.open(lmdb_directory, map_size=int(1e12))  # Adjust map size as needed
         with env.begin(write=True) as txn:
             # Save episode information
-            episode_key = f'episode_{records["episode"]}_'
-            txn.put(f'{episode_key}base_timestamp'.encode(), dumps(records['base_timestamp']))
-            txn.put(f'{episode_key}max_step'.encode(), dumps(records['max_step']))
-            if records['max_step'] > 0:
-                cameras = [camera for camera in records['records'][0]['obs']['sensors'].keys()]
+            episode_key = f'episode_{results["episode"]}_'
+            txn.put(f'{episode_key}base_timestamp'.encode(), dumps(results['base_timestamp']))
+            txn.put(f'{episode_key}max_step'.encode(), dumps(results['max_step']))
+            txn.put(f'{episode_key}instruct'.encode(), dumps(results['instruct']))
+            if results['max_step'] > 0:
+                cameras = [camera for camera in results['records'][0]['obs']['sensors'].keys()]
             else:
                 cameras = []
             txn.put(f'{episode_key}_cameras'.encode(), dumps(cameras))
-            txn.put(f'{episode_key}max_step'.encode(), dumps(records['max_step']))
+            txn.put(f'{episode_key}max_step'.encode(), dumps(results['max_step']))
 
             # Iterate through the records in the episode and save each one
-            for i, record in enumerate(records['records']):
+            for i, record in enumerate(results['records']):
                 record_key_prefix = f'{episode_key}record_{i}_'
 
                 # Save action
@@ -128,16 +132,17 @@ def load_episode_from_lmdb(lmdb_directory, episode_key):
 
     try:
         env = lmdb.open(lmdb_directory, readonly=True)
-        records = {"records": []}
+        results = {"records": []}
 
         with env.begin() as txn:
             # Load base timestamp and max step
-            records["base_timestamp"] = loads(txn.get(f'{episode_key}base_timestamp'.encode()))
-            records["max_step"] = loads(txn.get(f'{episode_key}max_step'.encode()))
-            records["episode"] = episode_key.split('_')[1]
+            results["base_timestamp"] = loads(txn.get(f'{episode_key}base_timestamp'.encode()))
+            results["max_step"] = loads(txn.get(f'{episode_key}max_step'.encode()))
+            results['instruct'] = loads(txn.get(f'{episode_key}instruct'.encode()))
+            results["episode"] = episode_key.split('_')[1]
 
             cameras = loads(txn.get(f'{episode_key}_cameras'.encode()))
-            max_step = records["max_step"]
+            max_step = results["max_step"]
             # Iterate through records
             for i in range(max_step):
                 record_key_prefix = f'{episode_key}record_{i}_'
@@ -167,9 +172,9 @@ def load_episode_from_lmdb(lmdb_directory, episode_key):
                         record["obs"]["sensors"][camera] = decode_jpeg(torch.from_numpy(image_data)).numpy()
                     else:  # RGB images
                         record["obs"]["sensors"][camera] = image_data
-                records["records"].append(record)
+                results["records"].append(record)
 
-        return records
+        return results
     except Exception as e:
         print(f"Error loading data: {e}")
         return None
@@ -244,6 +249,7 @@ if __name__ == "__main__":
     """
     import rospy
     import sys
+
     sys.path.append(".")
     rospy.init_node('lmdb_loader')
 

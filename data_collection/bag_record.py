@@ -87,6 +87,11 @@ def terminate_process_and_children(p):
 def end_record(process: subprocess.Popen, bag_full_path: str):
     global save_queue
     rospy.loginfo(f"\n--- Killing record of {bag_full_path} ---\n")
+    dir_name, _ = os.path.split(bag_full_path)
+    all_params = rospy.get_param_names()
+    d = {k: str(rospy.get_param(k)) for k in all_params}
+    with open(os.path.join(dir_name, 'params_end.json'), 'w') as f:
+        json.dump(d, f)
     terminate_process_and_children(process)
     # process.send_signal(signal.SIGINT)
     rospy.set_param('/record/ctrl/recording', False)

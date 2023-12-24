@@ -13,13 +13,25 @@ import cv2
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 import rospy
+
 sys.path.append(".")
 from data_collection.lmdb_interface import save_to_lmdb
 
 bridge = CvBridge()
 
 
-def load_from_bag(file_name, config):
+def load_from_bag(file_name, config=None):
+    if config is None:
+        config = {}
+    dir_name, _ = os.path.split(file_name)
+    params_file_name = os.path.join(dir_name, 'params.json')
+    params = {}
+    if os.path.exists(params_file_name):
+        try:
+            with open(params_file_name, 'r') as f:
+                params = json.load(f)
+        except:
+            rospy.logwarn(f"[loader] Error decoding {params_file_name}, use default...")
     try:
         bag = rosbag.Bag(file_name)
     except:
@@ -108,8 +120,12 @@ def load_from_bag(file_name, config):
             else:
                 observations["sensors"][k] = messages[0]
         del item["idx"]
-
-    results = {"base_timestamp": base_timestamp, "records": results, "max_step": len(results)}
+    instruct = ""
+    instruct_param = "/env/info/instruct"
+    if instruct_param in params:
+        instruct = params[instruct_param]
+    results = {"base_timestamp": base_timestamp, "records": results,
+               "max_step": len(results), "instruct": instruct, "params": params}
     results.update(config)
     return results
 
@@ -136,16 +152,16 @@ def record(input_path, lmdb_save_path=None, delete_bag=False, cover_exist=False)
     else:
         raise NotImplementedError
 
-    rospy.loginfo(f"Find RosBag file list: {file_list}")
+    rospy.loginfo(f"[loader] Find rosbag file list: {file_list}")
     all_results = []
     for i, full_file_name in enumerate(file_list):
         file_name = os.path.basename(full_file_name)
         name = os.path.splitext(file_name)[0]
         folder_name = os.path.dirname(full_file_name)
-        rospy.loginfo(f"[{i}] Loading {full_file_name}...")
+        rospy.loginfo(f"[loader] <{i}/{len(file_list)}> Loading {full_file_name}...")
         json_full_name = os.path.join(folder_name, "meta.json")
         if not os.path.exists(json_full_name):
-            rospy.logerr(f"[{i}] meta json not found...")
+            rospy.logerr(f"[loader] <{i}/{len(file_list)}> Pass {full_file_name} because meta json not found...")
             continue
         with open(json_full_name, 'r') as file:
             meta_data = json.load(file)
@@ -164,15 +180,15 @@ def record(input_path, lmdb_save_path=None, delete_bag=False, cover_exist=False)
                 with open(json_full_name, 'w') as file:
                     json.dump(meta_data, file, indent=4)
         else:
-            rospy.logwarn(f"[{i}] Pass {full_file_name} because save_path exists...")
+            rospy.logwarn(f"[loader] <{i}/{len(file_list)}> Pass {full_file_name} because save_path exists...")
 
         if delete_bag:
             try:
                 os.remove(full_file_name)
-                rospy.loginfo(f"[{i}] Deleted {full_file_name}")
+                rospy.loginfo(f"[loader] <{i}/{len(file_list)}> Deleted {full_file_name}")
             except OSError as e:
-                rospy.logerr(f"[{i}] Error deleting {full_file_name}: {e.strerror}")
-    rospy.loginfo(f"Record everything in {input_path}!")
+                rospy.logerr(f"[loader] <{i}/{len(file_list)}> Error deleting {full_file_name}: {e.strerror}")
+    rospy.loginfo(f"[loader] Record everything in {input_path}!")
 
     return all_results
 
