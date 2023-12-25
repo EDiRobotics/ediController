@@ -46,7 +46,7 @@ def display_sensor_data(results, display_image=False, display_action=False):
             rospy.sleep(adjusted_obs_timestamp - rospy.Time.now())
         if display_image:
             for sensor_topic, cv_image in observations['sensors'].items():
-                cv_image = np.transpose(cv_image, (1, 2, 0))
+                # cv_image = np.transpose(cv_image, (1, 2, 0))
                 # cv_image = cv_image[..., ::-1]
                 cv2.imshow(f"replay_{sensor_topic}", cv_image)
                 cv2.waitKey(1)

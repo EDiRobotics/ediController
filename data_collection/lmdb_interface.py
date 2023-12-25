@@ -103,50 +103,6 @@ def save_to_lmdb(results, lmdb_directory):
         return False
 
 
-def generate_gif(results, save_path, resize_dim=(80, 60)):
-    if not os.path.exists(save_path):
-        os.makedirs(save_path)
-
-    if not results['records'] or not results['records'][0]['obs']['sensors']:
-        rospy.logwarn("No records or sensors found in results.")
-        return False
-
-    episode = results['episode']
-    max_step = results['max_step']
-    if max_step <= 0:
-        rospy.logwarn(f"Max_step is {max_step} which is invalid.")
-
-    if "duration" not in results:
-        duration = float(results['records'][-1]["action_timestamp"]) - float(results['records'][0]["obs_timestamp"])
-    else:
-        duration = results["duration"]
-    for sensor_name in results['records'][0]['obs']['sensors'].keys():
-        images = []
-
-        for record in results['records']:
-            img_array = record['obs']['sensors'].get(sensor_name)
-
-            if isinstance(img_array, np.ndarray):
-                cv_image = np.transpose(img_array, (1, 2, 0))
-                # channel is different from cv2.imshow
-                cv_image = cv_image[..., ::-1]
-                img = Image.fromarray(cv_image.astype('uint8'), 'RGB')
-                if resize_dim is not None:
-                    img = img.resize(resize_dim, Image.ANTIALIAS)
-
-                images.append(img)
-
-        if not images:
-            rospy.logwarn(f"No images found for sensor {sensor_name}.")
-            continue
-
-        gif_path = os.path.join(save_path, f'{episode}_{sensor_name.lstrip("/").replace("/", "_")}_output.gif')
-        d = duration * 1000 / max_step
-        images[0].save(gif_path, save_all=True, append_images=images[1:], optimize=False, duration=d, loop=0)
-
-    return True
-
-
 def load_keys_from_lmdb(lmdb_directory):
     try:
         env = lmdb.open(lmdb_directory, map_size=int(1e12))  # Adjust map size as needed
@@ -214,7 +170,9 @@ def load_episode_from_lmdb(lmdb_directory, episode_key):
 
                     image_data = loads(txn.get(camera_key))
                     if isinstance(image_data, np.ndarray):
-                        record["obs"]["sensors"][camera] = decode_jpeg(torch.from_numpy(image_data)).numpy()
+                        image_decoded = decode_jpeg(torch.from_numpy(image_data))
+                        image_np = image_decoded.permute(1, 2, 0).numpy()
+                        record["obs"]["sensors"][camera] = image_np
                     else:  # RGB images
                         record["obs"]["sensors"][camera] = image_data
                 results["records"].append(record)
@@ -223,6 +181,50 @@ def load_episode_from_lmdb(lmdb_directory, episode_key):
     except Exception as e:
         print(f"Error loading data: {e}")
         return None
+
+
+def generate_gif(results, save_path, resize_dim=(80, 60)):
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+
+    if not results['records'] or not results['records'][0]['obs']['sensors']:
+        rospy.logwarn("No records or sensors found in results.")
+        return False
+
+    episode = results['episode']
+    max_step = results['max_step']
+    if max_step <= 0:
+        rospy.logwarn(f"Max_step is {max_step} which is invalid.")
+
+    if "duration" not in results:
+        duration = float(results['records'][-1]["action_timestamp"]) - float(results['records'][0]["obs_timestamp"])
+    else:
+        duration = results["duration"]
+    for sensor_name in results['records'][0]['obs']['sensors'].keys():
+        images = []
+
+        for record in results['records']:
+            cv_image = record['obs']['sensors'].get(sensor_name)
+
+            if isinstance(cv_image, np.ndarray):
+                # cv_image = np.transpose(cv_image, (1, 2, 0))
+                # channel is different from cv2.imshow
+                cv_image = cv_image[..., ::-1]
+                img = Image.fromarray(cv_image.astype('uint8'), 'RGB')
+                if resize_dim is not None:
+                    img = img.resize(resize_dim, Image.ANTIALIAS)
+
+                images.append(img)
+
+        if not images:
+            rospy.logwarn(f"No images found for sensor {sensor_name}.")
+            continue
+
+        gif_path = os.path.join(save_path, f'{episode}_{sensor_name.lstrip("/").replace("/", "_")}_output.gif')
+        d = duration * 1000 / max_step
+        images[0].save(gif_path, save_all=True, append_images=images[1:], optimize=False, duration=d, loop=0)
+
+    return True
 
 
 class EpisodicLMDBDataset(Dataset):

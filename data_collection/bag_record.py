@@ -130,6 +130,7 @@ def convert():
             lmdb_save_path = f"dataset/train_{datetime_now}_lmdb"
         rospy.loginfo(f"[record] Get {bag_full_path}, start saving to {lmdb_save_path}...")
         try:
+            time.sleep(1)
             record(bag_full_path, lmdb_save_path=lmdb_save_path, delete_bag=delete_bag)
         except Exception as e:
             rospy.logerr(f"[record] Saving {bag_full_path} error: {e}...")
