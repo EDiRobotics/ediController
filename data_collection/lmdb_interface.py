@@ -103,7 +103,7 @@ def save_to_lmdb(results, lmdb_directory):
         return False
 
 
-def generate_gif(results, save_path):
+def generate_gif(results, save_path, resize_dim=(80, 60)):
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
@@ -112,6 +112,14 @@ def generate_gif(results, save_path):
         return False
 
     episode = results['episode']
+    max_step = results['max_step']
+    if max_step <= 0:
+        rospy.logwarn(f"Max_step is {max_step} which is invalid.")
+
+    if "duration" not in results:
+        duration = float(results['records'][-1]["action_timestamp"]) - float(results['records'][0]["obs_timestamp"])
+    else:
+        duration = results["duration"]
     for sensor_name in results['records'][0]['obs']['sensors'].keys():
         images = []
 
@@ -123,6 +131,9 @@ def generate_gif(results, save_path):
                 # channel is different from cv2.imshow
                 cv_image = cv_image[..., ::-1]
                 img = Image.fromarray(cv_image.astype('uint8'), 'RGB')
+                if resize_dim is not None:
+                    img = img.resize(resize_dim, Image.ANTIALIAS)
+
                 images.append(img)
 
         if not images:
@@ -130,7 +141,8 @@ def generate_gif(results, save_path):
             continue
 
         gif_path = os.path.join(save_path, f'{episode}_{sensor_name.lstrip("/").replace("/", "_")}_output.gif')
-        images[0].save(gif_path, save_all=True, append_images=images[1:], optimize=False, duration=100, loop=0)
+        d = duration * 1000 / max_step
+        images[0].save(gif_path, save_all=True, append_images=images[1:], optimize=False, duration=d, loop=0)
 
     return True
 
