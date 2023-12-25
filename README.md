@@ -1,4 +1,4 @@
-# EDI Ros 0Pipeline
+# EDI Ros Pipeline
 
 ## Notice
 
@@ -13,7 +13,7 @@ In the lmdb dataset, keys are "status" and "sensors'.
 
 ## Install (New)
 
-#### Compile ros rpc server call dependency.
+#### Compile ros rpc server dependency.
 
 ```bash
 cd catkin_ws
