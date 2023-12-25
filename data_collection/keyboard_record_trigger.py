@@ -30,7 +30,9 @@ def play_mp3(file_name):
         file_path = mp3_mapping[file_name]
         try:
             # os.system(f"play {file_path} >/dev/null 2>&1")
-            process = subprocess.Popen(["play", file_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            # FIXME: May Introduce EOF Error
+            process = subprocess.Popen(["play", file_path], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
+                                       stderr=subprocess.DEVNULL)
         except Exception as e:
             rospy.logerr("Play mp3 failed: " + str(e))
 
