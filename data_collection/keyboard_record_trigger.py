@@ -184,11 +184,12 @@ def main():
     rospy.loginfo("Record Control Client Started")
     tutorial = """
 Press 'q' to quit, 
-Press 'r' to start or end recording (Pedal 1, intelligent), 
-Press 's' to start recording, 'e' to end recording, 
+Press 'r' (or Pedal 1) to start or end recording (intelligent),
+Press 's' to start recording, 'e' to end recording,
 Press 'p' to set param for \"/env/info/instruct\",
-Input 'ls' to list the records (Pedal 2) (only this life cycle is supported now),
-Input 'del' to enter into the delete program.
+Input 'ls' (or Pedal 1) to list the records (only this life cycle is supported now),
+Input 'del' to enter into the delete program,
+Input 'del last' (or Pedal 3) to delete the latest episode.
 """
     rospy.loginfo(tutorial)
 
