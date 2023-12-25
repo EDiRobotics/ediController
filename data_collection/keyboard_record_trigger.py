@@ -3,7 +3,7 @@ import json
 import os
 import shutil
 import time
-
+import subprocess
 import rospy
 from std_srvs.srv import Trigger
 
@@ -29,7 +29,8 @@ def play_mp3(file_name):
     if file_name in mp3_mapping:
         file_path = mp3_mapping[file_name]
         try:
-            os.system(f"play {file_path} >/dev/null 2>&1")
+            # os.system(f"play {file_path} >/dev/null 2>&1")
+            process = subprocess.Popen(["play", file_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception as e:
             rospy.logerr("Play mp3 failed: " + str(e))
 
