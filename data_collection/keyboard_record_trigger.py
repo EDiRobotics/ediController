@@ -165,7 +165,7 @@ def delete_bag():
             list_bag()
             rospy.loginfo("Enter 'q' to exit; Enter the index of the ROS bag to delete:")
             try:
-                symbol = "(recording )>>> " if rospy.get_param('/record/ctrl/recording', False) else ">>> "
+                symbol = "(recording) >>> " if rospy.get_param('/record/ctrl/recording', False) else ">>> "
                 num = input(symbol)
                 if num == "q":
                     return
@@ -195,7 +195,7 @@ Input 'del last' (or Pedal 3) to delete the latest episode.
     rospy.loginfo(tutorial)
 
     while not rospy.is_shutdown():
-        symbol = "(recording )>>> " if rospy.get_param('/record/ctrl/recording', False) else ">>> "
+        symbol = "(recording) >>> " if rospy.get_param('/record/ctrl/recording', False) else ">>> "
         command = input(symbol)
         if command == '':
             continue
