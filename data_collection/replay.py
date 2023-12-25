@@ -64,4 +64,5 @@ def display_sensor_data(results, display_image=False, display_action=False):
 
     cv2.destroyAllWindows()
     time.sleep(0.5)
-    rospy.set_param("/env/ctrl/switch", original_state)
+    if original_state is not None:
+        rospy.set_param("/env/ctrl/switch", original_state)

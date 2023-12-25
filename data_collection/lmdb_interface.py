@@ -7,6 +7,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 from torchvision.io import encode_jpeg, decode_jpeg, encode_png, decode_png
+from PIL import Image
 
 
 def save_to_lmdb(results, lmdb_directory):
@@ -100,6 +101,38 @@ def save_to_lmdb(results, lmdb_directory):
     except:
         traceback.print_exc()
         return False
+
+
+def generate_gif(results, save_path):
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+
+    if not results['records'] or not results['records'][0]['obs']['sensors']:
+        rospy.logwarn("No records or sensors found in results.")
+        return False
+
+    episode = results['episode']
+    for sensor_name in results['records'][0]['obs']['sensors'].keys():
+        images = []
+
+        for record in results['records']:
+            img_array = record['obs']['sensors'].get(sensor_name)
+
+            if isinstance(img_array, np.ndarray):
+                cv_image = np.transpose(img_array, (1, 2, 0))
+                # channel is different from cv2.imshow
+                cv_image = cv_image[..., ::-1]
+                img = Image.fromarray(cv_image.astype('uint8'), 'RGB')
+                images.append(img)
+
+        if not images:
+            rospy.logwarn(f"No images found for sensor {sensor_name}.")
+            continue
+
+        gif_path = os.path.join(save_path, f'{episode}_{sensor_name.lstrip("/").replace("/", "_")}_output.gif')
+        images[0].save(gif_path, save_all=True, append_images=images[1:], optimize=False, duration=100, loop=0)
+
+    return True
 
 
 def load_keys_from_lmdb(lmdb_directory):
@@ -267,6 +300,9 @@ if __name__ == "__main__":
     lmdb_directory: str = args.path
     keys = load_keys_from_lmdb(lmdb_directory)
     all_results = [(key, load_episode_from_lmdb(lmdb_directory, key)) for key in keys]
+    for episode, results in all_results:
+        if not generate_gif(results, lmdb_directory):
+            print(f"Error generating gif for {episode}")
     print(all_results)
 
     dataset = EpisodicLMDBDataset(lmdb_directory)

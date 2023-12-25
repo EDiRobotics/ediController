@@ -15,7 +15,7 @@ from sensor_msgs.msg import Image
 import rospy
 
 sys.path.append(".")
-from data_collection.lmdb_interface import save_to_lmdb
+from data_collection.lmdb_interface import save_to_lmdb, generate_gif
 
 bridge = CvBridge()
 
@@ -141,7 +141,7 @@ def find_files_with_extension(directory, extension):
     return file_list
 
 
-def record(input_path, lmdb_save_path=None, delete_bag=False, cover_exist=False):
+def record(input_path, lmdb_save_path=None, delete_bag=False, cover_exist=False, gif=True):
     if not os.path.exists(input_path):
         rospy.loginfo(f"Input path {input_path} doesn't exist, exiting...")
         exit(1)
@@ -174,7 +174,11 @@ def record(input_path, lmdb_save_path=None, delete_bag=False, cover_exist=False)
             if not success:
                 rospy.logerr(f"Error occurs when dumping {full_file_name}!")
                 continue
-
+            if gif:
+                success = generate_gif(results, lmdb_save_path)
+                if not success:
+                    rospy.logerr(f"Error occurs when generating gif for {full_file_name}!")
+                    continue
             if lmdb_save_path is not None:
                 absolute_lmdb_save_path = os.path.abspath(lmdb_save_path)
                 meta_data["save_path"] = absolute_lmdb_save_path
