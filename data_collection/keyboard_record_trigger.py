@@ -14,7 +14,7 @@ wait_time_press = 0.5
 records_bag_full_path = []
 
 
-def load_mp3_files(resource_path="'resource'"):
+def load_mp3_files(resource_path='resource'):
     mp3_mapping = {}
     for file_name in os.listdir(resource_path):
         if file_name.endswith('.mp3'):
@@ -29,7 +29,7 @@ def play_mp3(file_name):
     if file_name in mp3_mapping:
         file_path = mp3_mapping[file_name]
         try:
-            os.system(f"play {file_path}")
+            os.system(f"play {file_path} >/dev/null 2>&1")
         except Exception as e:
             rospy.logerr("Play mp3 failed: " + str(e))
 
@@ -79,7 +79,7 @@ def send_end_request():
 
 def set_ros_param():
     rospy.loginfo("Enter value to set for /env/info/instruct: ")
-    symbol = "(recording )>>> " if rospy.get_param('/record/ctrl/recording', False) else ">>> "
+    symbol = "(recording) >>> " if rospy.get_param('/record/ctrl/recording', False) else ">>> "
     param_value = input(symbol)
     if param_value.endswith("3"):
         param_value = param_value.rstrip("3")
