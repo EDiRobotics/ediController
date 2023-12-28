@@ -56,7 +56,11 @@ export ROS_MASTER_URI=http://192.168.1.240:11311 # Do not Replace this one
 
 ### Policy Inference
 
-4. Add `edi_gym` directory to your directory.
+4. Add `edi_gym` directory to your directory,
+Or you can add a link to the site-package path.
+```bash
+echo /home/radiance/projects/ediControler/  > /home/radiance/miniconda3/envs/ml/lib/python3.8/site-packages/edi_gym.pth
+```
 
 5. **(New) Run `source /home/pc/ediControler/catkin_ws/devel/setup.bash`**
 

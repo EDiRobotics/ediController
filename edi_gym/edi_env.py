@@ -105,12 +105,14 @@ class EdiEnv:
     def _obtain_obs_latest(self) -> (Dict, Dict):
         status, images = obtain_obs_latest()
         if status is None:
-            rospy.logerr(f"[Serious] Status is None, which should not happen")
+            rospy.logerr(
+                f"[Serious] Status is None, which should not happen, please check the publishing nodes...")
             status = self.last_status
         self.last_status = status
         for k, img in images.items():
             if img is None and k in self.last_images:
-                rospy.logerr(f"[Serious] Image {k} is None, which should not happen")
+                rospy.logerr(
+                    f"[Serious] Image {k} is None, which should not happen, please check the publishing nodes...")
                 img = self.last_images[k]
             images[k] = img
             self.last_images[k] = img
@@ -120,16 +122,6 @@ class EdiEnv:
         while not rospy.is_shutdown():
             rospy.loginfo('Checking Availability.')
             status, images = self._obtain_obs_latest()
-
-            if status is None:
-                rospy.logerr("Status is None, which should not happen")
-                self.last_status = status
-
-            for k, v in images.items():
-                if v is None:
-                    rospy.logerr(f"Image {k} is None, which should not happen")
-                    self.last_images[k] = v
-
             if status is not None and all(v is not None for v in images.values()):
                 break
             rospy.loginfo('Something not available, Retrying...')

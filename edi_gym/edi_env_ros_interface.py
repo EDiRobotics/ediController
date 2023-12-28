@@ -31,19 +31,22 @@ def _listener():
     rospy.spin()
 
 
-topic = '/sim_env/step/action'
-action_publisher = rospy.Publisher(topic, String, queue_size=1)
+action_topic = '/sim_env/step/action'
+action_publisher = rospy.Publisher(action_topic, String, queue_size=1)
 
-service = '/env/step/demo_action_srv'
-rospy.wait_for_service(service)
-action_service_demo = rospy.ServiceProxy(service, StringService)
-service = '/env/step/policy_action_srv'
-rospy.wait_for_service(service)
-action_service_policy = rospy.ServiceProxy(service, StringService)
+demo_service_srv = '/env/step/demo_action_srv'
+action_service_demo = rospy.ServiceProxy(demo_service_srv, StringService)
+policy_service_srv = '/env/step/policy_action_srv'
+action_service_policy = rospy.ServiceProxy(policy_service_srv, StringService)
 
-service = '/env/reset_srv'
-rospy.wait_for_service(service)
-reset_service = rospy.ServiceProxy(service, Trigger)
+reset_service_srv = '/env/reset_srv'
+reset_service = rospy.ServiceProxy(reset_service_srv, Trigger)
+
+
+def register_servers():
+    rospy.wait_for_service(demo_service_srv)
+    rospy.wait_for_service(policy_service_srv)
+    rospy.wait_for_service(reset_service_srv)
 
 
 def register_subscribers(image_topics, status_topic="/arm_status/all",
@@ -68,7 +71,11 @@ def start_listening():
 def get_camera_topics():
     all_topics = rospy.get_published_topics()
     camera_topics = [topic for topic, _ in all_topics if topic.startswith('/sensor/camera')]
-    rospy.loginfo(f"Obtain Camera topics: {str(camera_topics)}")
+    if len(camera_topics) >0:
+        rospy.loginfo(f"Obtain {len(camera_topics)} Camera topics: {str(camera_topics)}")
+    else:
+        rospy.logwarn(f"No camera topic detected.")
+
     return camera_topics
 
 
@@ -96,12 +103,14 @@ def process_single_cache_latest(cache, timestamp_start, name=None):
     return img
 
 
-def obtain_obs_latest() -> (Dict, Dict):
+def obtain_obs_latest(timeout=1) -> (Dict, Dict):
     timestamp_start = rospy.Time.now()
 
     while not rospy.is_shutdown():
+        if rospy.Time.now() - timestamp_start > rospy.Duration(timeout):
+            return None, {k: None for k in global_image_caches}
         status = None
-        for k, cache in global_status_caches.items():
+        for _, cache in global_status_caches.items():
             cache: message_filters.Cache
             latest = cache.getLatestTime()
             if latest is not None and timestamp_start < latest:
