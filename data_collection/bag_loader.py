@@ -99,6 +99,9 @@ def load_from_bag(file_name, config=None):
             "action_mode": action_data["mode"],
         })
 
+    if len(results) <= 2:
+        rospy.logerr(f"[loader] Failed to process {params_file_name}, len is {len(results)}...")
+        return None
     base_timestamp = results[0]["action_timestamp"]
     del results[0]
     del results[-1]
@@ -170,6 +173,9 @@ def record(input_path, lmdb_save_path=None, delete_bag=False, cover_exist=False,
 
         if "save_path" not in meta_data or cover_exist:
             results = load_from_bag(full_file_name, config=meta_data)
+            if results is None:
+                rospy.logerr(f"Error load from bag {full_file_name}, results is None!")
+                continue
             success = save_to_lmdb(results, lmdb_save_path)
             if not success:
                 rospy.logerr(f"Error occurs when dumping {full_file_name}!")
@@ -223,7 +229,17 @@ if __name__ == "__main__":
 
     input_path: str = args.path
     delete_bag: bool = args.delete_bag
-    all_results = record(input_path, lmdb_save_path="dataset/test", delete_bag=delete_bag, cover_exist=True)
+
+    file_dir = input_path
+    extension = ".bag"
+    file_list = find_files_with_extension(file_dir, extension)
+    all_results = []
+    for file_path in file_list:
+        with open(os.path.join(os.path.dirname(file_path), "meta.json"), 'r') as file:
+            d = json.load(file)
+            episode = d["episode"]
+        lmdb_save_path = f"dataset/train_{episode}_lmdb"
+        all_results += record(file_path, lmdb_save_path=lmdb_save_path, delete_bag=delete_bag, cover_exist=True)
 
     rospy.loginfo(f"----- Starting to replay -----")
     from data_collection.replay import display_sensor_data
