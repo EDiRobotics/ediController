@@ -28,7 +28,13 @@ import frrpc
 
 
 class FR5:
-    z_thres = 135
+    """
+    Defining the workspace limit
+    """
+    x_min, x_max = 300, 800
+    y_min, y_max = -300, 60
+    z_min, z_max = 135, 350
+
     method = "servoj"
 
     _lastHandlerJoint = np.zeros(6)
@@ -88,8 +94,11 @@ class FR5:
             print(f"[move_joint] joint is {joint} which has invalid length")
             return 3
         loc = self.robot.GetForwardKin(joint)[1:]
-        if loc[2] < self.z_thres:
-            print(f"[move_joint] joint is {joint}, which is too low at {loc}, force return.")
+        x, y, z = loc[0], loc[1], loc[2]
+        if not (self.x_min <= x <= self.x_max and self.y_min <= y <= self.y_max and self.z_min <= z <= self.z_max):
+            print(f"[move_joint] Out of workspace! joint \n{joint}, loc \n{loc}, force return.")
+            print(
+                f"Workspace limits: X({self.x_min}, {self.x_max}), Y({self.y_min}, {self.y_max}), Z({self.z_min}, {self.z_max})")
             return 14
         start = time.time()
         if self.method.lower() == "movej" or self._first is True:

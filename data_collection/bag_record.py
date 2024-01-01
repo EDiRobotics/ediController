@@ -8,6 +8,8 @@ import subprocess
 import threading
 import time
 import sys
+import traceback
+
 import rospy
 import psutil
 from std_msgs.msg import Int8
@@ -133,6 +135,7 @@ def convert():
             time.sleep(1)
             record(bag_full_path, lmdb_save_path=lmdb_save_path, delete_bag=delete_bag)
         except Exception as e:
+            traceback.print_exc()
             rospy.logerr(f"[record] Saving {bag_full_path} error: {e}...")
 
 

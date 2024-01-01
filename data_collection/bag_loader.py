@@ -3,6 +3,7 @@ import json
 import sys
 import os
 import time
+import traceback
 import numpy as np
 import rosbag
 import rospy
@@ -34,34 +35,37 @@ def load_from_bag(file_name, config=None):
             rospy.logwarn(f"[loader] Error decoding {params_file_name}, use default...")
     try:
         bag = rosbag.Bag(file_name)
+        # Define topics of interest
+        status_topic = "/arm_status/all"
+        sensor_topics = [topic for topic, _ in bag.get_type_and_topic_info()[1].items() if topic.startswith("/sensor/")]
+        action_topic = "/env/step/action"
+        idx_topic = "/env/step/idx"
+
+        # Initialize data structures
+        topics = {status_topic: [], action_topic: [], idx_topic: []}
+        for sensor_topic in sensor_topics:
+            topics[sensor_topic] = []
+
+        # Dictionary to store idx timestamps
+        idx_times = {}
+
+        # Process messages from the bag file
+        for topic, msg, t in bag.read_messages(topics=topics.keys()):
+            if topic == idx_topic:
+                idx_times[msg.data] = t
+                topics[topic].append((msg.data, t))
+            elif topic == action_topic:
+                action_data = json.loads(msg.data)
+                topics[topic].append((action_data, t))
+            else:
+                # For other topics, use the timestamp of the message
+                topics[topic].append((msg, t))
+        bag.close()
     except:
+        traceback.print_exc()
+        rospy.logerr(f"[loader] Reading topics from {params_file_name} rosbag file.")
+
         return None
-    # Define topics of interest
-    status_topic = "/arm_status/all"
-    sensor_topics = [topic for topic, _ in bag.get_type_and_topic_info()[1].items() if topic.startswith("/sensor/")]
-    action_topic = "/env/step/action"
-    idx_topic = "/env/step/idx"
-
-    # Initialize data structures
-    topics = {status_topic: [], action_topic: [], idx_topic: []}
-    for sensor_topic in sensor_topics:
-        topics[sensor_topic] = []
-
-    # Dictionary to store idx timestamps
-    idx_times = {}
-
-    # Process messages from the bag file
-    for topic, msg, t in bag.read_messages(topics=topics.keys()):
-        if topic == idx_topic:
-            idx_times[msg.data] = t
-            topics[topic].append((msg.data, t))
-        elif topic == action_topic:
-            action_data = json.loads(msg.data)
-            topics[topic].append((action_data, t))
-        else:
-            # For other topics, use the timestamp of the message
-            topics[topic].append((msg, t))
-    bag.close()
 
     # Process and pair actions with observations
     results = []

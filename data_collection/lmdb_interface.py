@@ -227,69 +227,6 @@ def generate_gif(results, save_path, resize_dim=(80, 60)):
     return True
 
 
-class EpisodicLMDBDataset(Dataset):
-    def __init__(self, root_dir):
-        self.lmdb_paths = []
-        self.keys_map = []
-        self.index_to_lmdb = []
-
-        for subdir, dirs, files in os.walk(root_dir):
-            if "data.mdb" in files:
-                self.lmdb_paths.append(subdir)
-
-        for lmdb_dir in self.lmdb_paths:
-            keys = load_keys_from_lmdb(lmdb_dir)
-            if keys:
-                self.keys_map.append(keys)
-                self.index_to_lmdb.extend([(lmdb_dir, key) for key in keys])
-            else:
-                print(f"Warning: No keys found in {lmdb_dir}")
-
-    def __len__(self):
-        return len(self.index_to_lmdb)
-
-    def __getitem__(self, idx):
-        lmdb_dir, episode_key = self.index_to_lmdb[idx]
-        return load_episode_from_lmdb(lmdb_dir, episode_key)
-
-
-class StepLMDBDataset(Dataset):
-    def __init__(self, root_dir):
-        self.lmdb_paths = []
-        self.episode_to_lmdb = {}
-        self.index_to_episode_step = []
-
-        for subdir, dirs, files in os.walk(root_dir):
-            if "data.mdb" in files:
-                self.lmdb_paths.append(subdir)
-
-        for lmdb_dir in self.lmdb_paths:
-            keys = load_keys_from_lmdb(lmdb_dir)
-            if keys:
-                for key in keys:
-                    self.episode_to_lmdb[key] = lmdb_dir
-                    episode_data = load_episode_from_lmdb(lmdb_dir, key)
-                    if episode_data:
-                        for step in range(episode_data["max_step"]):
-                            self.index_to_episode_step.append((key, step))
-            else:
-                print(f"Warning: No keys found in {lmdb_dir}")
-
-    def __len__(self):
-        return len(self.index_to_episode_step)
-
-    def __getitem__(self, idx):
-        episode_key, step = self.index_to_episode_step[idx]
-        lmdb_dir = self.episode_to_lmdb[episode_key]
-        episode_data = load_episode_from_lmdb(lmdb_dir, episode_key)
-        if episode_data:
-            obs = episode_data["records"][step]["obs"]
-            action = episode_data["records"][step]["action"]
-            return obs, action
-        else:
-            return None, None
-
-
 if __name__ == "__main__":
     """
     Test load from lmdb and replay
@@ -318,9 +255,6 @@ if __name__ == "__main__":
         if not generate_gif(results, lmdb_directory):
             print(f"Error generating gif for {episode}")
     print(all_results)
-
-    dataset = EpisodicLMDBDataset(lmdb_directory)
-    dataset = StepLMDBDataset(lmdb_directory)
 
     rospy.loginfo(f"----- Starting to replay -----")
     from data_collection.replay import display_sensor_data
