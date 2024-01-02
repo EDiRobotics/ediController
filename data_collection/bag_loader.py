@@ -1,4 +1,5 @@
 import argparse
+import datetime
 import json
 import sys
 import os
@@ -170,43 +171,43 @@ def record(input_path, lmdb_save_path=None, delete_bag=False, cover_exist=False,
         rospy.loginfo(f"[loader] <{i}/{len(file_list)}> Loading {full_file_name}...")
         json_full_name = os.path.join(folder_name, "meta.json")
         if not os.path.exists(json_full_name):
-            rospy.logerr(f"[loader] <{i}/{len(file_list)}> Pass {full_file_name} because meta json not found...")
-            continue
-        with open(json_full_name, 'r') as file:
-            meta_data = json.load(file)
+            rospy.logwarn(f"[loader] <{i}/{len(file_list)}> meta.json missed for {full_file_name}...")
+            datetime_start = datetime.datetime.now()
+            datetime_start = datetime_start.strftime("%Y%m%d%H%M%S")
+            meta_data = {"episode": f"missed_{datetime_start}"}
+        else:
+            with open(json_full_name, 'r') as file:
+                meta_data = json.load(file)
 
         if "save_path" not in meta_data or cover_exist:
             results = load_from_bag(full_file_name, config=meta_data)
             if results is None:
                 rospy.logerr(f"Error load from bag {full_file_name}, results is None!")
                 continue
-            success = save_to_lmdb(results, lmdb_save_path)
-            if not success:
-                rospy.logerr(f"Error occurs when dumping {full_file_name}!")
-                continue
-            if gif:
-                success = generate_gif(results, lmdb_save_path)
-                if not success:
-                    rospy.logerr(f"Error occurs when generating gif for {full_file_name}!")
-                    continue
             if lmdb_save_path is not None:
+                success = save_to_lmdb(results, lmdb_save_path, gif=gif)
+                if not success:
+                    rospy.logerr(f"Error occurs when dumping {full_file_name}!")
+                    continue
+
                 absolute_lmdb_save_path = os.path.abspath(lmdb_save_path)
                 meta_data["save_path"] = absolute_lmdb_save_path
                 meta_data["duration"] = results["duration"]
                 with open(json_full_name, 'w') as file:
                     json.dump(meta_data, file, indent=4)
 
+                if delete_bag:
+                    try:
+                        os.remove(full_file_name)
+                        rospy.loginfo(f"[loader] <{i}/{len(file_list)}> Deleted {full_file_name}")
+                    except OSError as e:
+                        rospy.logerr(f"[loader] <{i}/{len(file_list)}> Error deleting {full_file_name}: {e.strerror}")
+
             all_results.append((full_file_name, results))
         else:
             rospy.logwarn(f"[loader] <{i}/{len(file_list)}> Pass {full_file_name} because save_path exists...")
 
-        if delete_bag:
-            try:
-                os.remove(full_file_name)
-                rospy.loginfo(f"[loader] <{i}/{len(file_list)}> Deleted {full_file_name}")
-            except OSError as e:
-                rospy.logerr(f"[loader] <{i}/{len(file_list)}> Error deleting {full_file_name}: {e.strerror}")
-    rospy.loginfo(f"[loader] Record everything in {input_path}!")
+    rospy.loginfo(f"[loader] Record {input_path} finished!")
 
     return all_results
 
@@ -243,6 +244,7 @@ if __name__ == "__main__":
             d = json.load(file)
             episode = d["episode"]
         lmdb_save_path = f"dataset/train_{episode}_lmdb"
+        # lmdb_save_path = f"dataset/train_nav_lmdb"
         all_results += record(file_path, lmdb_save_path=lmdb_save_path, delete_bag=delete_bag, cover_exist=True)
 
     rospy.loginfo(f"----- Starting to replay -----")

@@ -10,7 +10,7 @@ from torchvision.io import encode_jpeg, decode_jpeg, encode_png, decode_png
 from PIL import Image
 
 
-def save_to_lmdb(results, lmdb_directory):
+def save_to_lmdb(results, lmdb_directory, gif=True):
     """
     results:
     {
@@ -97,10 +97,15 @@ def save_to_lmdb(results, lmdb_directory):
                 key_list.append(episode_key)
             txn.put(f'_keys'.encode(), dumps(key_list))
         env.close()
-        return True
     except:
         traceback.print_exc()
         return False
+    if gif:
+        success = generate_gif(results, lmdb_directory)
+        if not success:
+            rospy.logerr(f"Error occurs when generating gif for {full_file_name}!")
+            return False
+    return True
 
 
 def load_keys_from_lmdb(lmdb_directory):
@@ -225,6 +230,29 @@ def generate_gif(results, save_path, resize_dim=(80, 60)):
         images[0].save(gif_path, save_all=True, append_images=images[1:], optimize=False, duration=d, loop=0)
 
     return True
+
+
+def merge_fragments(root_dir, lmdb_save_path, gif=True):
+    lmdb_paths = []
+    keys_map = []
+    index_to_lmdb = []
+    for subdir, dirs, files in os.walk(root_dir):
+        if "data.mdb" in files:
+            lmdb_paths.append(subdir)
+
+    for lmdb_dir in lmdb_paths:
+        keys = load_keys_from_lmdb(lmdb_dir)
+        if keys:
+            keys_map.append(keys)
+            index_to_lmdb.extend([(lmdb_dir, key) for key in keys])
+        else:
+            print(f"Warning: No keys found in {lmdb_dir}")
+    for lmdb_dir, episode_key in index_to_lmdb:
+        results = load_episode_from_lmdb(lmdb_dir, episode_key)
+        success = save_to_lmdb(results, lmdb_save_path, gif=gif)
+        if not success:
+            rospy.logerr(f"Error occurs when dumping {full_file_name}!")
+            continue
 
 
 if __name__ == "__main__":

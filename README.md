@@ -76,7 +76,7 @@ echo /home/radiance/projects/ediControler/  > /home/radiance/miniconda3/envs/ml/
 
 1. **(New) Run `source /home/pc/ediControler/catkin_ws/devel/setup.bash`**
 
-2. Run **recording backend**  `python data_collection/bag_record.py`.
+2. Run **recording backend**  `python data_collection/recorder.py`.
 
     - This command initiates a background data collection program. In the script, you can modify two parameters: `lmdb_save_path_is_fixed` and `delete_bag`.
         - `lmdb_save_path_is_fixed`: If set to `True`, all episodes from this session will be stored in a single database directory. If set to `False`, a new database directory will be created for each episode.
