@@ -156,9 +156,7 @@ if __name__ == "__main__":
     """
     Test load from lmdb and replay
     """
-    import rospy
 
-    rospy.init_node('lmdb_loader')
 
     parser = argparse.ArgumentParser(description='LMDB Dataset Loader Test',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -170,6 +168,8 @@ if __name__ == "__main__":
                         help='Replay action')
     args = parser.parse_args()
     dataset_directory: str = args.path
+    # import rospy
+    # rospy.init_node('lmdb_loader')
     # print("Generate dataset config")
     # generate_dataset_config(lmdb_directory, os.path.join(dataset_directory, "test2.csv"))
     print("Preparing dataset")
