@@ -5,7 +5,6 @@ from pickle import dumps, loads
 import lmdb
 import numpy as np
 import torch
-from torch.utils.data import Dataset
 from torchvision.io import encode_jpeg, decode_jpeg, encode_png, decode_png
 from PIL import Image
 
@@ -121,6 +120,66 @@ def load_keys_from_lmdb(lmdb_directory):
         return key_list
     except:
         traceback.print_exc()
+        return None
+
+
+def load_step_from_lmdb(lmdb_directory, episode_key, step):
+    """
+    Load records from an LMDB database for a specific episode.
+
+    :param lmdb_directory: The directory where the LMDB database is stored.
+    :param episode_key: The key for the episode to be loaded.
+    :return: A dictionary with the loaded data for the specified episode.
+    """
+    if not os.path.exists(lmdb_directory):
+        print(f"Data directory {lmdb_directory} does not exist.")
+        return None
+
+    try:
+        env = lmdb.open(lmdb_directory, readonly=True)
+        results = {"records": []}
+
+        with env.begin() as txn:
+            # Load base timestamp and max step
+            results["base_timestamp"] = loads(txn.get(f'{episode_key}base_timestamp'.encode()))
+            results["max_step"] = loads(txn.get(f'{episode_key}max_step'.encode()))
+            results['instruct'] = loads(txn.get(f'{episode_key}instruct'.encode()))
+            results["episode"] = episode_key.split('_')[1]
+
+            cameras = loads(txn.get(f'{episode_key}_cameras'.encode()))
+            max_step = results["max_step"]
+            # Iterate through records
+            i = step
+            record_key_prefix = f'{episode_key}record_{i}_'
+            action_key = f'{record_key_prefix}action'.encode()
+            record = {
+                "action": loads(txn.get(action_key)),
+                "obs": {
+                    "status": loads(txn.get(f'{record_key_prefix}obs_status'.encode())),
+                    "sensors": {}
+                },
+                "obs_timestamp": loads(txn.get(f'{record_key_prefix}obs_timestamp'.encode())),
+                "action_timestamp": loads(txn.get(f'{record_key_prefix}action_timestamp'.encode())),
+                "action_mode": loads(txn.get(f'{record_key_prefix}action_mode'.encode()))
+            }
+
+            for camera in cameras:
+                camera_key = f'{record_key_prefix}obs_sensor_{camera}'.encode()
+                if txn.get(camera_key) is None:
+                    break  # Exit loop if no more sensors
+
+                image_data = loads(txn.get(camera_key))
+                if isinstance(image_data, np.ndarray):
+                    image_decoded = decode_jpeg(torch.from_numpy(image_data))
+                    image_np = image_decoded.permute(1, 2, 0).numpy()
+                    record["obs"]["sensors"][camera] = image_np
+                else:  # RGB images
+                    record["obs"]["sensors"][camera] = image_data
+            results["records"] = record
+
+        return results
+    except Exception as e:
+        print(f"Error loading data: {e}")
         return None
 
 

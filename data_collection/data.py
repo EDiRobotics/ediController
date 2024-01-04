@@ -9,7 +9,7 @@ import pandas as pd
 import sys
 
 sys.path.append(".")
-from data_collection.lmdb_interface import load_keys_from_lmdb, load_episode_from_lmdb
+from data_collection.lmdb_interface import load_keys_from_lmdb, load_episode_from_lmdb, load_step_from_lmdb
 
 
 def generate_dataset_config(root_dir, csv_file_name):
@@ -36,69 +36,6 @@ def generate_dataset_config(root_dir, csv_file_name):
         writer = csv.writer(file)
         writer.writerow(['episode_key', 'lmdb_dir', 'max_step'])
         writer.writerows(csv_data)
-
-
-class EpisodicLMDBDataset(Dataset):
-    def __init__(self, root_dir):
-        self.lmdb_paths = []
-        self.keys_map = []
-        self.index_to_lmdb = []
-
-        for subdir, dirs, files in os.walk(root_dir):
-            if "data.mdb" in files:
-                self.lmdb_paths.append(subdir)
-
-        for lmdb_dir in self.lmdb_paths:
-            keys = load_keys_from_lmdb(lmdb_dir)
-            if keys:
-                self.keys_map.append(keys)
-                self.index_to_lmdb.extend([(lmdb_dir, key) for key in keys])
-            else:
-                print(f"Warning: No keys found in {lmdb_dir}")
-
-    def __len__(self):
-        return len(self.index_to_lmdb)
-
-    def __getitem__(self, idx):
-        lmdb_dir, episode_key = self.index_to_lmdb[idx]
-        return load_episode_from_lmdb(lmdb_dir, episode_key)
-
-
-class StepLMDBDataset(Dataset):
-    def __init__(self, root_dir):
-        self.lmdb_paths = []
-        self.episode_to_lmdb = {}
-        self.index_to_episode_step = []
-
-        for subdir, dirs, files in os.walk(root_dir):
-            if "data.mdb" in files:
-                self.lmdb_paths.append(subdir)
-
-        for lmdb_dir in self.lmdb_paths:
-            keys = load_keys_from_lmdb(lmdb_dir)
-            if keys:
-                for key in keys:
-                    self.episode_to_lmdb[key] = lmdb_dir
-                    episode_data = load_episode_from_lmdb(lmdb_dir, key)
-                    if episode_data:
-                        for step in range(episode_data["max_step"]):
-                            self.index_to_episode_step.append((key, step))
-            else:
-                print(f"Warning: No keys found in {lmdb_dir}")
-
-    def __len__(self):
-        return len(self.index_to_episode_step)
-
-    def __getitem__(self, idx):
-        episode_key, step = self.index_to_episode_step[idx]
-        lmdb_dir = self.episode_to_lmdb[episode_key]
-        episode_data = load_episode_from_lmdb(lmdb_dir, episode_key)
-        if episode_data:
-            obs = episode_data["records"][step]["obs"]
-            action = episode_data["records"][step]["action"]
-            return obs, action
-        else:
-            return None, None
 
 
 class EpisodicLMDBDatasetV2(Dataset):
@@ -142,21 +79,22 @@ class StepLMDBDatasetV2(Dataset):
         episode_key, step = self.index_to_episode_step[idx]
         lmdb_dir = self.episode_to_lmdb[episode_key]
         lmdb_dir = os.path.join(self.root_dir, lmdb_dir)
-        episode_data = load_episode_from_lmdb(lmdb_dir, episode_key)
+        episode_data = load_step_from_lmdb(lmdb_dir, episode_key, step)
         if episode_data:
-            obs = episode_data["records"][step]["obs"]
-            action = episode_data["records"][step]["action"]
+            obs = episode_data["records"]["obs"]
+            action = episode_data["records"]["action"]
             inst = episode_data["instruct"]
             return obs, action, inst
         else:
-            return None, None
+            if not os.path.exists(lmdb_dir):
+                raise Exception(f"Cannot load episode {episode_key}: path {lmdb_dir} not exist!")
+            raise Exception(f"Cannot load step {step} from {episode_key} in {lmdb_dir}!")
 
 
 if __name__ == "__main__":
     """
     Test load from lmdb and replay
     """
-
 
     parser = argparse.ArgumentParser(description='LMDB Dataset Loader Test',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -166,14 +104,19 @@ if __name__ == "__main__":
                         help='Replay image with cv2')
     parser.add_argument('--display_action', '-a', action='store_true',
                         help='Replay action')
+    parser.add_argument('--generate_config', '-g', action='store_true',
+                        help='Replay action')
     args = parser.parse_args()
     dataset_directory: str = args.path
-    # import rospy
-    # rospy.init_node('lmdb_loader')
-    # print("Generate dataset config")
-    # generate_dataset_config(lmdb_directory, os.path.join(dataset_directory, "test2.csv"))
+    generate_config: bool = args.generate_config
+    if generate_config:
+        import rospy
+        rospy.init_node('lmdb_loader')
+        print("Generate dataset config")
+        generate_dataset_config(dataset_directory, os.path.join(dataset_directory, "test_nav.csv"))
+
     print("Preparing dataset")
-    dataset = StepLMDBDatasetV2(os.path.join(dataset_directory, "test2.csv"))
+    dataset = StepLMDBDatasetV2(os.path.join(dataset_directory, "test_nav.csv"))
     import pdb
 
     pdb.set_trace()
