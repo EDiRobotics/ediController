@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 import json
+import queue
 import sys
+import threading
 import time
 import traceback
 
@@ -17,9 +19,11 @@ except Exception as e:
     rospy.logerr(f"Error occurs when launching Real Environment Backend: {e}")
     exit(0)
 
-topic_name = "/arm_status/gripper_pos"
-publisher_gripper = rospy.Publisher(topic_name, Float32, queue_size=5)
+control_freq = 50
+control_t = 1 / control_freq
+idx = 0
 last_action = time.time()
+obs_time = rospy.Time.now()
 
 
 def step_with_action(action):
@@ -59,6 +63,8 @@ def step_with_action(action):
 rospy.init_node('backend', anonymous=True)
 rospy.loginfo(f"Launch Real Environment Backend...")
 
+topic_name = "/arm_status/gripper_pos"
+publisher_gripper = rospy.Publisher(topic_name, Float32, queue_size=5)
 topic_name = "/env/step/idx"
 publisher_idx = rospy.Publisher(topic_name, Int32, queue_size=100)
 topic_name = "/env/step/action"
@@ -66,44 +72,83 @@ publisher_action = rospy.Publisher(topic_name, String, queue_size=100)
 topic_name = "/env/step/info"
 publisher_info = rospy.Publisher(topic_name, String, queue_size=100)
 
-idx = 0
-obs_time = rospy.Time.now()
+
+class TrajectoryOptimizer:
+    def __init__(self, optimize_interval=3):
+        self.optimize_interval = optimize_interval
+        self.action_queue = queue.Queue()
+
+    def optimize_traj(self):
+        while not rospy.is_shutdown():
+            time.sleep(self.optimize_interval)
+
+    def add_action(self, action):
+        self.action_queue.put(action)
+
+    def get_action(self, time):
+        action = []
+        return action
+
+
+traj_opt = TrajectoryOptimizer()
+
+
+class ArmControlThread(threading.Thread):
+    def __init__(self):
+        threading.Thread.__init__(self)
+
+    def run(self):
+        while not rospy.is_shutdown():
+            time_now = rospy.Time.now()
+            if not rospy.Time.now() >= obs_time + rospy.Duration(secs=0.1):
+                time.sleep((obs_time + rospy.Duration(secs=0.1) - rospy.Time.now()).to_sec())
+            else:
+                rospy.logwarn("Missing desired control frequency...")
+            action = traj_opt.get_action(time_now)
+            try:
+                step_with_action(action)
+            except Exception as e:
+                traceback.print_exc()
+                rospy.logwarn(f"Error happened: {e}")
+
+
+control_thread = ArmControlThread()
+control_thread.start()
 
 
 def handle_service(request: StringServiceRequest):
     global idx, last_switch_state, obs_time
+    info = {"error": 0}
     try:
-        idx += 1
-        publisher_idx.publish(idx)
         action_str = request.message
         action = json.loads(action_str)
-        action_time = rospy.Time.now()
-        # if not rospy.Time.now() >= obs_time + rospy.Duration(secs=0.1):
-        #     time.sleep((obs_time + rospy.Duration(secs=0.1) - rospy.Time.now()).to_sec())
-        action_record = {"idx": idx, "action": action,
-                         "timestamp": action_time.to_time(),
-                         "obs_timestamp": obs_time.to_time(),
-                         "mode": last_switch_state}
-        publisher_action.publish(json.dumps(action_record))
-        info = step_with_action(action)
-        obs_time = rospy.Time.now()
-        idx += 1
-        publisher_idx.publish(idx)
-        info_str = json.dumps(info)
-        publisher_info.publish(info_str)
-        return StringServiceResponse(
-            success=True,
-            message=info_str
-        )
     except json.JSONDecodeError as e:
         rospy.logwarn(f"Error json loads: {e}")
         error_msg = json.dumps({"error": "JSON decode error"})
         return StringServiceResponse(success=False, message=error_msg)
-    except Exception as e:
-        traceback.print_exc()
-        rospy.logwarn(f"Error happened: {e}")
-        error_msg = json.dumps({"error": "Exception occurred"})
+
+    if not valid(action):
+        rospy.logwarn(f"Action {action} is not valid...")
+        info["error"] = 4
+        error_msg = json.dumps(info)
         return StringServiceResponse(success=False, message=error_msg)
+    idx += 1
+    publisher_idx.publish(idx)
+    action_time = rospy.Time.now()
+    action_record = {"idx": idx, "action": action,
+                     "timestamp": action_time.to_time(),
+                     "obs_timestamp": obs_time.to_time(),
+                     "mode": last_switch_state}
+    publisher_action.publish(json.dumps(action_record))
+    traj_opt.add_action(action)
+    obs_time = rospy.Time.now()
+    idx += 1
+    publisher_idx.publish(idx)
+    info_str = json.dumps(info)
+    return StringServiceResponse(
+        success=True,
+        message=info_str
+    )
 
 
 def handle_service_demo(request):
