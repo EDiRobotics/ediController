@@ -318,35 +318,47 @@ if __name__ == "__main__":
     """
     Test load from lmdb and replay
     """
-    import rospy
     import sys
 
     sys.path.append(".")
-    rospy.init_node('lmdb_loader')
 
     parser = argparse.ArgumentParser(description='LMDB Dataset Loader Test',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--path', type=str, default="./dataset/test",
+    parser.add_argument('--path', type=str, default="./dataset/",
                         help='Path can be a rosbag file or a directory (recursively search).')
     parser.add_argument('--display_image', '-i', action='store_true',
                         help='Replay image with cv2')
     parser.add_argument('--display_action', '-a', action='store_true',
                         help='Replay action')
     args = parser.parse_args()
-    display_image = args.display_image
-    display_action = args.display_action
-    lmdb_directory: str = args.path
-    keys = load_keys_from_lmdb(lmdb_directory)
-    all_results = [(key, load_episode_from_lmdb(lmdb_directory, key)) for key in keys]
-    for episode, results in all_results:
-        if not generate_gif(results, lmdb_directory):
-            print(f"Error generating gif for {episode}")
-    print(all_results)
 
-    rospy.loginfo(f"----- Starting to replay -----")
-    from data_collection.replay import display_sensor_data
+    cmd = input("options: merge, replay")
+    if cmd == "merge":
+        import datetime
 
-    for i, (full_file_name, results) in enumerate(all_results):
-        rospy.loginfo(f"Start to replay {full_file_name}...")
-        display_sensor_data(results, display_image=display_image, display_action=display_action)
-    rospy.loginfo(f"Finish all replay tasks...")
+        lmdb_directory: str = args.path
+        datetime_now = datetime.datetime.now()
+        datetime_now = datetime_now.strftime("%Y%m%d%H%M%S")
+        lmdb_save_path = f"dataset/train_merge_{datetime_now}_lmdb"
+        print(f"start merging to {lmdb_save_path}")
+        merge_fragments(lmdb_directory, lmdb_save_path)
+    else:
+        display_image = args.display_image
+        display_action = args.display_action
+        lmdb_directory: str = args.path
+        keys = load_keys_from_lmdb(lmdb_directory)
+        all_results = [(key, load_episode_from_lmdb(lmdb_directory, key)) for key in keys]
+        for episode, results in all_results:
+            if not generate_gif(results, lmdb_directory):
+                print(f"Error generating gif for {episode}")
+        print(all_results)
+        import rospy
+
+        rospy.init_node('lmdb_loader')
+        rospy.loginfo(f"----- Starting to replay -----")
+        from data_collection.replay import display_sensor_data
+
+        for i, (full_file_name, results) in enumerate(all_results):
+            rospy.loginfo(f"Start to replay {full_file_name}...")
+            display_sensor_data(results, display_image=display_image, display_action=display_action)
+        rospy.loginfo(f"Finish all replay tasks...")
