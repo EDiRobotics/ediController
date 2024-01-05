@@ -7,6 +7,7 @@ from torchvision.io import encode_jpeg, decode_jpeg, encode_png, decode_png
 from PIL import Image
 import pandas as pd
 import sys
+import pdb
 
 sys.path.append(".")
 from data_collection.lmdb_interface import load_keys_from_lmdb, load_episode_from_lmdb, load_step_from_lmdb
@@ -30,7 +31,6 @@ def generate_dataset_config(root_dir, csv_file_name):
             relative_lmdb_dir = os.path.relpath(lmdb_dir, root_dir)
             key_to_add_csv = (episode_key, relative_lmdb_dir, max_step)
             csv_data.append(key_to_add_csv)
-
     # Write data to CSV file
     with open(csv_file_name, mode='w', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
@@ -90,6 +90,10 @@ class StepLMDBDatasetV2(Dataset):
                 raise Exception(f"Cannot load episode {episode_key}: path {lmdb_dir} not exist!")
             raise Exception(f"Cannot load step {step} from {episode_key} in {lmdb_dir}!")
 
+    @property
+    def episode_num(self):
+        return len(self.episode_to_lmdb)
+
 
 if __name__ == "__main__":
     """
@@ -100,6 +104,8 @@ if __name__ == "__main__":
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--path', type=str, default="./dataset/",
                         help='Path can be a rosbag file or a directory (recursively search).')
+    parser.add_argument('--csv_name', type=str, default="test.csv",
+                        help='Path can be a rosbag file or a directory (recursively search).')
     parser.add_argument('--display_image', '-i', action='store_true',
                         help='Replay image with cv2')
     parser.add_argument('--display_action', '-a', action='store_true',
@@ -108,15 +114,16 @@ if __name__ == "__main__":
                         help='Replay action')
     args = parser.parse_args()
     dataset_directory: str = args.path
+    csv_name: str = args.csv_name
     generate_config: bool = args.generate_config
     if generate_config:
         import rospy
         rospy.init_node('lmdb_loader')
         print("Generate dataset config")
-        generate_dataset_config(dataset_directory, os.path.join(dataset_directory, "test_nav.csv"))
+        generate_dataset_config(dataset_directory, os.path.join(dataset_directory, csv_name))
 
     print("Preparing dataset")
-    dataset = StepLMDBDatasetV2(os.path.join(dataset_directory, "test_nav.csv"))
+    dataset = StepLMDBDatasetV2(os.path.join(dataset_directory, csv_name))
     import pdb
 
     pdb.set_trace()
