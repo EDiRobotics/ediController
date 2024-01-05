@@ -3,6 +3,7 @@ import json
 import os
 import datetime
 import queue
+import shutil
 import signal
 import subprocess
 import threading
@@ -12,11 +13,14 @@ import traceback
 
 import rospy
 import psutil
-from std_msgs.msg import Int8
-from std_srvs.srv import Trigger, TriggerResponse
+from std_msgs.msg import Int8, String
+from std_srvs.srv import Trigger, TriggerResponse, TriggerRequest
 
 sys.path.append(".")
 from data_collection.bag_loader import record
+
+heartbeat_timestamps = {}
+latest_client = None
 
 lmdb_save_path_is_fixed = False
 delete_bag = True
@@ -139,16 +143,41 @@ def convert():
             rospy.logerr(f"[record] Saving {bag_full_path} error: {e}...")
 
 
+def client_heartbeat_callback(msg):
+    global latest_client, heartbeat_timestamps
+    latest_client = msg.data
+    heartbeat_timestamps[latest_client] = rospy.get_time()
+    rospy.loginfo(f"Heartbeat received from client {latest_client}")
+
+
 convert_thread = threading.Thread(target=convert)
 convert_thread.start()
 
+
+def check_heartbeat():
+    global latest_client, heartbeat_timestamps, current_process, current_bag_full_path
+    while not rospy.is_shutdown():
+        if current_process is not None and latest_client in heartbeat_timestamps:
+            current_time = rospy.get_time()
+            if current_time - heartbeat_timestamps[latest_client] > 5:
+                rospy.logwarn(f"Heartbeat timeout for client {latest_client}. Ending recording.")
+                end_record_service_response = end_record_service(TriggerRequest())
+                if end_record_service_response.success:
+                    try:
+                        shutil.rmtree(os.path.dirname(current_bag_full_path))
+                        rospy.loginfo(f"Successfully deleted directory {os.path.dirname(current_bag_full_path)}")
+                    except OSError as e:
+                        rospy.logerr(f"Error deleting directory: {e}")
+
+        rospy.sleep(5)
+
+
+heartbeat_thread = threading.Thread(target=check_heartbeat)
+heartbeat_thread.start()
+
+client_heartbeat_subscriber = rospy.Subscriber("/record/ctrl/client", String, client_heartbeat_callback)
 start_service = rospy.Service('/record/ctrl/start_record_srv', Trigger, start_record_service)
 end_service = rospy.Service('/record/ctrl/end_record_srv', Trigger, end_record_service)
 rospy.spin()
 convert_thread.join()
-
-# if __name__ == "__main__":
-#     start_record_service(None)
-#     time.sleep(5)
-#     end_record_service(None)
-#     convert_thread.join()
+heartbeat_thread.join()

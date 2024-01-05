@@ -17,6 +17,22 @@ except:
     exit(1)
 
 
+class HeartbeatClient:
+    def __init__(self, client_identifier="default", heartbeat_interval=2):
+        self.heartbeat_interval = heartbeat_interval
+        self.client_identifier = client_identifier
+        self.publisher = rospy.Publisher('/record/ctrl/client', String, queue_size=10)
+        self.heartbeat_thread = threading.Thread(target=self.send_heartbeat)
+        # self.heartbeat_thread.daemon = True
+        self.heartbeat_thread.start()
+
+    def send_heartbeat(self):
+        while not rospy.is_shutdown():
+            self.publisher.publish(self.client_identifier)
+            # rospy.loginfo(f"Heartbeat sent by client {self.client_identifier}")
+            time.sleep(self.heartbeat_interval)
+
+
 class EdiEnv:
     demo = False
     _use_action_chunk = False
@@ -24,6 +40,7 @@ class EdiEnv:
     def __init__(self, demo=False) -> None:
         super(EdiEnv, self).__init__()
         EdiEnv.demo = demo
+        self.heartbeat_client = HeartbeatClient()
 
         self.last_status = None
         self.last_images = {}
