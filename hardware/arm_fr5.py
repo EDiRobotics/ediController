@@ -1,5 +1,7 @@
 import os
+import pdb
 import sys
+import threading
 import time
 from ctypes import cdll
 from typing import Dict, List, Tuple
@@ -27,26 +29,45 @@ frrpc = cdll.LoadLibrary(path)
 import frrpc
 
 
+class ThreadSafeProxy:
+    def __init__(self, robot):
+        self.robot = robot
+        self.lock = threading.Lock()
+
+    def __getattr__(self, name):
+        attr = getattr(self.robot, name)
+
+        if callable(attr):
+            def wrapper(*args, **kwargs):
+                with self.lock:
+                    result = attr(*args, **kwargs)
+                return result
+
+            return wrapper
+        else:
+            return attr
+
+
 class FR5:
     """
     Defining the workspace limit
     """
     x_min, x_max = 300, 800
     y_min, y_max = -300, 60
-    z_min, z_max = 135, 350
-
+    z_min, z_max = 140, 350
     method = "servoj"
 
     _lastHandlerJoint = np.zeros(6)
     _lastJointsVel = np.zeros(6)
     _filter_width = 6
     _trajVel = [np.zeros(6)] * _filter_width
-    _first = True
+    _first = False
     _cmdT = 0.012
 
     def __init__(self, robot_ip):
         self.robot_ip = robot_ip
         self.robot = frrpc.RPC(self.robot_ip)
+        # self.robot = ThreadSafeProxy(self.robot)
         print(f'\033[37m[__init__]: Robot initializing.. \033[0m')
         # gripper 14 cm
         gripper_length = 13.0
@@ -57,7 +78,25 @@ class FR5:
         self.robot.SetToolCoord(1, gripper_pose, 0, 0)
         self.move_end([600, 0, 300, -180, 0, 90])
         self.close_gripper()
+        self.lock = threading.Lock()
         print(f'\033[37m[__init__]: Robot initialized. \033[0m')
+
+    def check_valid(self, action):
+        if len(action) != 7:
+            return False
+        return True
+
+    def revise_action(self, action):
+        joint = action[:6]
+        gripper = action[-1]
+        loc = self.robot.GetForwardKin(joint)[1:]
+        loc[0] = max(self.x_min, min(self.x_max, loc[0]))
+        loc[1] = max(self.y_min, min(self.y_max, loc[1]))
+        loc[2] = max(self.z_min, min(self.z_max, loc[2]))
+        loc = [float(l) for l in loc]
+        joint = self.robot.GetInverseKin(0, loc, -1)[1:]
+        action = joint + [gripper]
+        return action
 
     def reconnect(self):
         self.robot = frrpc.RPC(self.robot_ip)
@@ -104,13 +143,13 @@ class FR5:
         if self.method.lower() == "movej" or self._first is True:
             try:
                 j1 = joint
-                p1 = self.robot.GetForwardKin(j1)[1:]
+                p1 = loc
                 e_p1 = [0.000, 0.000, 0.000, 0.000]
                 d_p1 = [1.000, 1.000, 1.000, 1.000, 1.000, 1.000]
                 # print(f"Debug: [move_joint] move joint to {joint}, P1 {p1}.")
                 self._first = False
                 self._lastHandlerJoint = joint
-                return self.robot.MoveJ(j1, p1, 1, 0, 100.0, 180.0, 100.0, e_p1, -1.0, 0, d_p1)
+                return self.robot.MoveJ(joint, p1, 1, 0, 100.0, 180.0, 100.0, e_p1, -1.0, 0, d_p1)
 
             except Exception as e:
                 print(f"[move_joint] An error occurs: ", e)
@@ -125,6 +164,30 @@ class FR5:
                 return ret
             except Exception as e:
                 print(f"[move_joint] An error occurs: ", e)
+                return 14
+
+    def move_joint_servo(self, joint, cmdT):
+        if len(joint) != 6:
+            print(f"[move_joint_servo] joint is {joint} which has invalid length")
+            return 3
+        loc = self.robot.GetForwardKin(joint)[1:]
+        x, y, z = loc[0], loc[1], loc[2]
+        if not (self.x_min <= x <= self.x_max and self.y_min <= y <= self.y_max and self.z_min <= z <= self.z_max):
+            # print(f"[move_joint_servo] Out of workspace! joint \n{joint}, loc \n{loc}, force return.")
+            # print(
+            #     f"Workspace limits: X({self.x_min}, {self.x_max}), Y({self.y_min}, {self.y_max}), Z({self.z_min}, {self.z_max})")
+            return 14
+        joint = self._emaFilterVel(joint, self._lastHandlerJoint)
+        start = time.time()
+        try:
+            ret = self.robot.ServoJ(joint, 0.0, 0.0, cmdT, 0.0, 0.0)
+            delta_sec = cmdT - (time.time() - start)
+            if delta_sec > 0.001:
+                time.sleep(delta_sec)
+            return ret
+        except Exception as e:
+            print(f"[move_joint_servo] An error occurs: ", e)
+            return 14
 
     def detect_errors(self) -> Tuple[int, List[Dict[int, str]]]:
         rets = self.robot.GetRobotErrorCode()

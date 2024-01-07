@@ -1,10 +1,14 @@
 #!/usr/bin/env python
+import abc
 import json
 import queue
 import sys
 import threading
 import time
 import traceback
+from abc import abstractmethod
+
+import numpy as np
 
 sys.path.append(".")
 import rospy
@@ -19,49 +23,30 @@ except Exception as e:
     rospy.logerr(f"Error occurs when launching Real Environment Backend: {e}")
     exit(0)
 
+rospy.init_node('backend', anonymous=True)
+rospy.loginfo(f"Launch Real Environment Backend...")
+
 control_freq = 50
 control_t = 1 / control_freq
 idx = 0
-last_action = time.time()
 obs_time = rospy.Time.now()
 
 
-def step_with_action(action):
+def step_with_action_servo(action, cmd_time):
     """
     :param action: 7 length list. The first 6 item contain the 6 joint angle,
+    :param cmd_time:
     the last item contains the gripper proportion.
     :return: a dict containing some information
     """
-    global last_action
-    action = [float(a) for a in action]
     joint = action[:6]
     gripper = action[-1]
     publisher_gripper.publish(gripper)
-    # real env step
-    if time.time() - last_action > 1:
-        robot_controller.reset_first()
-    last_action = time.time()
-    retJ = robot_controller.move_joint(joint)
-    retG = robot_controller.set_gripper(gripper)
-    err, errors = robot_controller.detect_errors()
+    # robot_controller.reset_first()
+    # robot_controller.move_joint(joint)
+    robot_controller.move_joint_servo(joint, cmd_time)
+    robot_controller.set_gripper(gripper)
 
-    err = err or retJ or retG
-    if err is not None:
-        err = int(err)
-    else:
-        rospy.logwarn(f"The err is None by accident, it should be an integer. Currently retJ: {retJ}, retG: {retG}")
-        err = 0
-    errors.append(robot_controller.lookup_error(retJ))
-    errors.append(robot_controller.lookup_error(retG))
-
-    step_action_info = dict()
-    step_action_info["error"] = err
-    step_action_info["error_details"] = errors
-    return step_action_info
-
-
-rospy.init_node('backend', anonymous=True)
-rospy.loginfo(f"Launch Real Environment Backend...")
 
 topic_name = "/arm_status/gripper_pos"
 publisher_gripper = rospy.Publisher(topic_name, Float32, queue_size=5)
@@ -73,42 +58,235 @@ topic_name = "/env/step/info"
 publisher_info = rospy.Publisher(topic_name, String, queue_size=100)
 
 
-class TrajectoryOptimizer:
-    def __init__(self, optimize_interval=3):
+class Trajectory(abc.ABC):
+
+    def __init__(self, traj_start):
+        self.traj_start = traj_start
+
+    @abstractmethod
+    def get_position(self, t):
+        """
+        :return: ndarray (7,)
+        """
+        return None
+
+    @property
+    def start(self):
+        """
+        :return: rospy.Time
+        """
+        return self.traj_start
+
+    @property
+    def end(self):
+        """
+        :return: rospy.Time
+        """
+        return None
+
+
+class DiscreteTrajectory(Trajectory):
+    def __init__(self, traj_start, plans, pace_duration):
+        """
+        :param traj_start: rospy.Time
+        :param plans: List of positions, each position is ndarray (7,)
+        :param pace_duration:  rospy.Duration
+        """
+        super().__init__(traj_start)  # Call the base class's __init__ method
+        self.plans = plans
+        self.pace_duration = pace_duration
+
+    def get_position(self, t):
+        if t < self.start or t > self.end:
+            return None
+
+        # Calculate the step index
+        time_elapsed = t - self.start
+        step_index = int(time_elapsed // self.pace_duration)
+
+        # If it's the last step, return the last position
+        if step_index >= len(self.plans) - 1:
+            return self.plans[-1]
+
+        # Calculate the fraction of the current step
+        step_fraction = (time_elapsed % self.pace_duration) / self.pace_duration
+
+        # Linear interpolation between the current step and the next step
+        current_step_position = self.plans[step_index]
+        next_step_position = self.plans[step_index + 1]
+        interpolated_position = current_step_position + step_fraction * (next_step_position - current_step_position)
+
+        return interpolated_position
+
+    @property
+    def end(self):
+        return self.start + len(self.plans) * self.pace_duration
+
+    def get_last(self):
+        return self.plans[-1]
+
+
+class TrajectoryServer:
+    """
+    Suppose the trajectory optimizer is de
+    """
+
+    def __init__(self, optimize_interval=0.01, traj_length=0.5, config=None):
+        if config is None:
+            config = {}
+        self.config = config
         self.optimize_interval = optimize_interval
         self.action_queue = queue.Queue()
+        self.current_window = None
+        self.traj_length = rospy.Duration(traj_length)
+        self.optimized_trajectory = None
+        self.first_trajectory = None
+        self.last_position = None
+        self.raw_trajectories = []
+        self.thread = threading.Thread(target=self.reoptimize_traj, args=())
+        self.thread.start()
 
-    def optimize_traj(self):
+    def reoptimize_traj(self):
         while not rospy.is_shutdown():
-            time.sleep(self.optimize_interval)
+            self._optimize_traj()
+
+    def _optimize_traj(self):
+        pace_duration = rospy.Duration(control_t)
+        while not self.action_queue.empty():
+            action_plans, timestamp = self.action_queue.get()
+            start_timestamp = timestamp + rospy.Duration(control_t)
+            self.raw_trajectories.append(DiscreteTrajectory(start_timestamp, action_plans, pace_duration))
+        now = rospy.Time.now()
+        self.raw_trajectories = [traj for traj in self.raw_trajectories if traj.end > now]
+
+        end_time = now + self.traj_length
+        current_time = now
+        pace_duration = rospy.Duration(control_t)
+        ema_positions = []
+
+        while current_time <= end_time:
+            valid_positions = []
+            weights = []
+            total_weight = 0
+
+            # Gather positions and calculate weights
+            for traj in self.raw_trajectories:
+                position = traj.get_position(current_time)
+                if position is not None:
+                    valid_positions.append(position)
+                    weight = np.exp(-(now - traj.start).to_sec())
+                    weights.append(weight)
+                    total_weight += weight
+
+            # Normalize weights and calculate weighted sum
+            if total_weight > 0 and valid_positions:
+                normalized_weights = [w / total_weight for w in weights]
+                weighted_sum = sum(np.array(pos) * w for pos, w in zip(valid_positions, normalized_weights))
+                ema_positions.append(weighted_sum)
+            else:
+                break
+
+            current_time += pace_duration
+        if ema_positions:
+            self.last_position = self.raw_trajectories[-1].get_last()
+            self.first_trajectory = DiscreteTrajectory(now, ema_positions, pace_duration)
+            self.optimized_trajectory = self._spline_optimize_traj(self.first_trajectory)
+
+    def _spline_optimize_traj(self, first_trajectory):
+        optimize_config = self.config
+        return first_trajectory
 
     def add_action(self, action):
-        self.action_queue.put(action)
+        now = rospy.Time.now()
+        action_: np.ndarray = np.array(action)
+        if len(action_.shape) == 1:
+            action_ = action_[np.newaxis, :]
+        self.action_queue.put((action_, now))
 
-    def get_action(self, time):
-        action = []
-        return action
+    def get_action(self, t):
+        if self.optimized_trajectory is None:
+            return None
+        action = self.optimized_trajectory.get_position(t)
+        if action is not None:
+            return action.tolist()
+        if self.last_position is not None:
+            return self.last_position.tolist()
+        return None
 
 
-traj_opt = TrajectoryOptimizer()
+class SimpleTrajectoryServer(TrajectoryServer):
+
+    def _optimize_traj(self):
+        pace_duration = rospy.Duration(control_t)
+        while not self.action_queue.empty():
+            action_plans, timestamp = self.action_queue.get()
+            start_timestamp = timestamp + rospy.Duration(control_t)
+            if len(action_plans) == 1:
+                action_plans = action_plans
+            self.raw_trajectories.append(DiscreteTrajectory(start_timestamp, action_plans, pace_duration))
+        now = rospy.Time.now()
+        self.raw_trajectories = [traj for traj in self.raw_trajectories if traj.end > now]
+        end_time = now + self.traj_length
+        current_time = now
+        pace_duration = rospy.Duration(control_t)
+        ema_positions = []
+
+        while current_time <= end_time:
+            valid_positions = []
+            weights = []
+            total_weight = 0
+
+            # Gather positions and calculate weights
+            for traj in self.raw_trajectories:
+                position = traj.get_position(current_time)
+                if position is not None:
+                    valid_positions.append(position)
+                    weight = np.exp(-(now - traj.start).to_sec())
+                    weights.append(weight)
+                    total_weight += weight
+
+            # Normalize weights and calculate weighted sum
+            if total_weight > 0 and valid_positions:
+                normalized_weights = [w / total_weight for w in weights]
+                weighted_sum = sum(np.array(pos) * w for pos, w in zip(valid_positions, normalized_weights))
+                ema_positions.append(weighted_sum)
+            else:
+                break
+
+            current_time += pace_duration
+        if ema_positions:
+            self.last_position = ema_positions[-1]
+            self.first_trajectory = DiscreteTrajectory(now, ema_positions, pace_duration)
+            self.optimized_trajectory = self._spline_optimize_traj(self.first_trajectory)
+
+
+traj_server = SimpleTrajectoryServer()
 
 
 class ArmControlThread(threading.Thread):
     def __init__(self):
         threading.Thread.__init__(self)
+        self.control_time = None
 
     def run(self):
+        self.control_time = rospy.Time.now()
         while not rospy.is_shutdown():
-            time_now = rospy.Time.now()
-            if not rospy.Time.now() >= obs_time + rospy.Duration(secs=0.1):
-                time.sleep((obs_time + rospy.Duration(secs=0.1) - rospy.Time.now()).to_sec())
+            next_control_time = self.control_time + rospy.Duration(nsecs=control_t)
+            action = traj_server.get_action(next_control_time)
+            # print(action)
+            if action is None:
+                # rospy.logerr("Get action is None!")
+                self.control_time = rospy.Time.now()
+                continue
+            if rospy.Time.now() < next_control_time:
+                time.sleep((next_control_time - rospy.Time.now()).to_sec())
             else:
                 rospy.logwarn("Missing desired control frequency...")
-            action = traj_opt.get_action(time_now)
             try:
-                step_with_action(action)
+                step_with_action_servo(action, control_t)
+                self.control_time = rospy.Time.now()
             except Exception as e:
-                traceback.print_exc()
+                # traceback.print_exc()
                 rospy.logwarn(f"Error happened: {e}")
 
 
@@ -122,16 +300,18 @@ def handle_service(request: StringServiceRequest):
     try:
         action_str = request.message
         action = json.loads(action_str)
+        action = [float(a) for a in action]
     except json.JSONDecodeError as e:
         rospy.logwarn(f"Error json loads: {e}")
         error_msg = json.dumps({"error": "JSON decode error"})
         return StringServiceResponse(success=False, message=error_msg)
-
-    if not valid(action):
+    if not robot_controller.check_valid(action):
         rospy.logwarn(f"Action {action} is not valid...")
         info["error"] = 4
         error_msg = json.dumps(info)
         return StringServiceResponse(success=False, message=error_msg)
+    # FIXME: Multi-thread problem
+    # action = robot_controller.revise_action(action)
     idx += 1
     publisher_idx.publish(idx)
     action_time = rospy.Time.now()
@@ -140,7 +320,7 @@ def handle_service(request: StringServiceRequest):
                      "obs_timestamp": obs_time.to_time(),
                      "mode": last_switch_state}
     publisher_action.publish(json.dumps(action_record))
-    traj_opt.add_action(action)
+    traj_server.add_action(action)
     obs_time = rospy.Time.now()
     idx += 1
     publisher_idx.publish(idx)
@@ -172,11 +352,12 @@ def handle_service_replay(request):
         return StringServiceResponse(success=False, message="Not Allowed")
 
 
-last_switch_state = "policy"
+last_switch_state = rospy.get_param("/env/ctrl/switch", "policy")
 rospy.set_param("/env/ctrl/switch", last_switch_state)
-rospy.set_param("/env/ctrl/policy", True)
+rospy.set_param("/env/ctrl/policy", False)
 rospy.set_param("/env/ctrl/demo", False)
 rospy.set_param("/env/ctrl/replay", False)
+rospy.set_param(f"/env/ctrl/{last_switch_state}", True)
 
 
 def switch(event):

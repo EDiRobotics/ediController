@@ -71,7 +71,7 @@ def start_listening():
 def get_camera_topics():
     all_topics = rospy.get_published_topics()
     camera_topics = [topic for topic, _ in all_topics if topic.startswith('/sensor/camera')]
-    if len(camera_topics) >0:
+    if len(camera_topics) > 0:
         rospy.loginfo(f"Obtain {len(camera_topics)} Camera topics: {str(camera_topics)}")
     else:
         rospy.logwarn(f"No camera topic detected.")
@@ -197,7 +197,11 @@ def execute_action(action, demo=False):
     request = StringServiceRequest(action_json)
     rospy.logdebug(f"Request action: {action_json}")
     action_service = action_service_demo if demo else action_service_policy
-    response = action_service(request)
+    try:
+        response = action_service(request)
+    except Exception as e:
+        rospy.logerr(f"Error requesting action server: {e}")
+        return {}
     if not response.success:
         rospy.logerr(f"Request action return errors: {response.message}")
         if "allowed" in response.message.lower():
