@@ -173,21 +173,32 @@ class FR5:
         loc = self.robot.GetForwardKin(joint)[1:]
         x, y, z = loc[0], loc[1], loc[2]
         if not (self.x_min <= x <= self.x_max and self.y_min <= y <= self.y_max and self.z_min <= z <= self.z_max):
-            # print(f"[move_joint_servo] Out of workspace! joint \n{joint}, loc \n{loc}, force return.")
-            # print(
-            #     f"Workspace limits: X({self.x_min}, {self.x_max}), Y({self.y_min}, {self.y_max}), Z({self.z_min}, {self.z_max})")
+            print(f"[move_joint_servo] Out of workspace! joint \n{joint}, loc \n{loc}, force return.")
+            print(
+                f"Workspace limits: X({self.x_min}, {self.x_max}), Y({self.y_min}, {self.y_max}), Z({self.z_min}, {self.z_max})")
             return 14
-        joint = self._emaFilterVel(joint, self._lastHandlerJoint)
         start = time.time()
-        try:
-            ret = self.robot.ServoJ(joint, 0.0, 0.0, cmdT, 0.0, 0.0)
-            delta_sec = cmdT - (time.time() - start)
-            if delta_sec > 0.001:
-                time.sleep(delta_sec)
-            return ret
-        except Exception as e:
-            print(f"[move_joint_servo] An error occurs: ", e)
-            return 14
+        if self._first is True:
+            try:
+                j1 = joint
+                p1 = loc
+                e_p1 = [0.000, 0.000, 0.000, 0.000]
+                d_p1 = [1.000, 1.000, 1.000, 1.000, 1.000, 1.000]
+                # print(f"Debug: [move_joint] move joint to {joint}, P1 {p1}.")
+                self._first = False
+                self._lastHandlerJoint = joint
+                return self.robot.MoveJ(joint, p1, 1, 0, 100.0, 180.0, 100.0, e_p1, -1.0, 0, d_p1)
+
+            except Exception as e:
+                print(f"[move_joint] An error occurs: ", e)
+        else:
+            joint = self._emaFilterVel(joint, self._lastHandlerJoint)
+            try:
+                ret = self.robot.ServoJ(joint, 0.0, 0.0, cmdT, 0.0, 0.0)
+                return ret
+            except Exception as e:
+                print(f"[move_joint_servo] An error occurs: ", e)
+                return 14
 
     def detect_errors(self) -> Tuple[int, List[Dict[int, str]]]:
         rets = self.robot.GetRobotErrorCode()

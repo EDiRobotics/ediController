@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 import abc
 import json
+import pdb
 import queue
 import sys
 import threading
 import time
 import traceback
 from abc import abstractmethod
-
 import numpy as np
 
 sys.path.append(".")
@@ -24,10 +24,11 @@ except Exception as e:
     exit(0)
 
 rospy.init_node('backend', anonymous=True)
-rospy.loginfo(f"Launch Real Environment Backend...")
+rospy.loginfo(f"Launching Real Environment Backend...")
 
-control_freq = 50
+control_freq = 100
 control_t = 1 / control_freq
+control_t_nsecs = int(control_t * 1000000000)
 idx = 0
 obs_time = rospy.Time.now()
 
@@ -42,10 +43,9 @@ def step_with_action_servo(action, cmd_time):
     joint = action[:6]
     gripper = action[-1]
     publisher_gripper.publish(gripper)
-    # robot_controller.reset_first()
     # robot_controller.move_joint(joint)
     robot_controller.move_joint_servo(joint, cmd_time)
-    robot_controller.set_gripper(gripper)
+    # robot_controller.set_gripper(gripper)
 
 
 topic_name = "/arm_status/gripper_pos"
@@ -131,11 +131,11 @@ class TrajectoryServer:
     Suppose the trajectory optimizer is de
     """
 
-    def __init__(self, optimize_interval=0.01, traj_length=0.5, config=None):
+    def __init__(self, optimize_interval=0.02, traj_length=0.1, config=None):
         if config is None:
             config = {}
         self.config = config
-        self.optimize_interval = optimize_interval
+        self.optimize_interval = rospy.Duration(optimize_interval)
         self.action_queue = queue.Queue()
         self.current_window = None
         self.traj_length = rospy.Duration(traj_length)
@@ -149,19 +149,19 @@ class TrajectoryServer:
     def reoptimize_traj(self):
         while not rospy.is_shutdown():
             self._optimize_traj()
+            rospy.sleep(self.optimize_interval)
 
     def _optimize_traj(self):
-        pace_duration = rospy.Duration(control_t)
+        pace_duration = rospy.Duration(nsecs=control_t_nsecs)
         while not self.action_queue.empty():
             action_plans, timestamp = self.action_queue.get()
-            start_timestamp = timestamp + rospy.Duration(control_t)
+            start_timestamp = timestamp + rospy.Duration(nsecs=control_t_nsecs)
             self.raw_trajectories.append(DiscreteTrajectory(start_timestamp, action_plans, pace_duration))
         now = rospy.Time.now()
         self.raw_trajectories = [traj for traj in self.raw_trajectories if traj.end > now]
-
         end_time = now + self.traj_length
         current_time = now
-        pace_duration = rospy.Duration(control_t)
+        pace_duration = rospy.Duration(nsecs=control_t_nsecs)
         ema_positions = []
 
         while current_time <= end_time:
@@ -188,7 +188,6 @@ class TrajectoryServer:
 
             current_time += pace_duration
         if ema_positions:
-            self.last_position = self.raw_trajectories[-1].get_last()
             self.first_trajectory = DiscreteTrajectory(now, ema_positions, pace_duration)
             self.optimized_trajectory = self._spline_optimize_traj(self.first_trajectory)
 
@@ -201,6 +200,7 @@ class TrajectoryServer:
         action_: np.ndarray = np.array(action)
         if len(action_.shape) == 1:
             action_ = action_[np.newaxis, :]
+        self.last_position = action_[-1]
         self.action_queue.put((action_, now))
 
     def get_action(self, t):
@@ -209,6 +209,7 @@ class TrajectoryServer:
         action = self.optimized_trajectory.get_position(t)
         if action is not None:
             return action.tolist()
+        rospy.logwarn("self.optimized_trajectory.get_position failed, use last action. ")
         if self.last_position is not None:
             return self.last_position.tolist()
         return None
@@ -217,18 +218,19 @@ class TrajectoryServer:
 class SimpleTrajectoryServer(TrajectoryServer):
 
     def _optimize_traj(self):
-        pace_duration = rospy.Duration(control_t)
+        pace_duration = rospy.Duration(nsecs=control_t_nsecs)
         while not self.action_queue.empty():
             action_plans, timestamp = self.action_queue.get()
-            start_timestamp = timestamp + rospy.Duration(control_t)
+            start_timestamp = timestamp + rospy.Duration(nsecs=control_t_nsecs)
             if len(action_plans) == 1:
-                action_plans = action_plans
+                n = 20
+                action_plans = np.tile(action_plans, (n, 1))
             self.raw_trajectories.append(DiscreteTrajectory(start_timestamp, action_plans, pace_duration))
         now = rospy.Time.now()
         self.raw_trajectories = [traj for traj in self.raw_trajectories if traj.end > now]
         end_time = now + self.traj_length
         current_time = now
-        pace_duration = rospy.Duration(control_t)
+        pace_duration = rospy.Duration(nsecs=control_t_nsecs)
         ema_positions = []
 
         while current_time <= end_time:
@@ -251,16 +253,23 @@ class SimpleTrajectoryServer(TrajectoryServer):
                 weighted_sum = sum(np.array(pos) * w for pos, w in zip(valid_positions, normalized_weights))
                 ema_positions.append(weighted_sum)
             else:
-                break
+                # TODO
+                if self.last_position is not None:
+                    ema_positions.append(self.last_position)
+                else:
+                    break
 
             current_time += pace_duration
         if ema_positions:
-            self.last_position = ema_positions[-1]
             self.first_trajectory = DiscreteTrajectory(now, ema_positions, pace_duration)
             self.optimized_trajectory = self._spline_optimize_traj(self.first_trajectory)
 
 
 traj_server = SimpleTrajectoryServer()
+
+joint_angles = [[] for _ in range(6)]
+times = []
+plot_lock = threading.Lock()
 
 
 class ArmControlThread(threading.Thread):
@@ -269,25 +278,39 @@ class ArmControlThread(threading.Thread):
         self.control_time = None
 
     def run(self):
+        call_count = 0
+        loop_count = 0
+        start_time = time.time()
+        robot_controller.reset_first()
         self.control_time = rospy.Time.now()
         while not rospy.is_shutdown():
-            next_control_time = self.control_time + rospy.Duration(nsecs=control_t)
+            loop_count += 1
+            elapsed_time = time.time() - start_time
+            if elapsed_time >= 20:  # Check if 60 seconds have passed
+                frequency = call_count / elapsed_time
+                loop_frequency = loop_count / elapsed_time
+                rospy.loginfo(f"Actual frequency: {frequency} Hz, Loop frequency: {loop_frequency}")
+                call_count = 0
+                loop_count = 0
+                start_time = time.time()
+            next_control_time = self.control_time + rospy.Duration(nsecs=control_t_nsecs)
             action = traj_server.get_action(next_control_time)
-            # print(action)
+
             if action is None:
-                # rospy.logerr("Get action is None!")
+                rospy.logerr("Get action is None!")
                 self.control_time = rospy.Time.now()
                 continue
             if rospy.Time.now() < next_control_time:
-                time.sleep((next_control_time - rospy.Time.now()).to_sec())
+                sleep_duration = next_control_time - rospy.Time.now()
+                rospy.sleep(sleep_duration)
             else:
                 rospy.logwarn("Missing desired control frequency...")
             try:
+                call_count += 1
                 step_with_action_servo(action, control_t)
-                self.control_time = rospy.Time.now()
             except Exception as e:
-                # traceback.print_exc()
                 rospy.logwarn(f"Error happened: {e}")
+                self.control_time = rospy.Time.now()
 
 
 control_thread = ArmControlThread()
@@ -421,4 +444,53 @@ service_replay = rospy.Service('/env/step/replay_action_srv', StringService, han
 service_demo = rospy.Service('/env/step/demo_action_srv', StringService, handle_service_demo)
 service_policy = rospy.Service('/env/step/policy_action_srv', StringService, handle_service_policy)
 timer = rospy.Timer(rospy.Duration(nsecs=100), switch)
-rospy.spin()
+rospy.loginfo(f"All servers registered...")
+
+
+def spin():
+    rospy.spin()
+
+
+spin_thread = threading.Thread(target=spin)
+spin_thread.start()
+
+# plt.ion()
+# fig, axs = plt.subplots(6, 1, figsize=(10, 15))
+#
+#
+# def plot_joint_angles():
+#     current_time = time.time()
+#     if times:
+#         with plot_lock:
+#             recent_times = [t - current_time for t in times if current_time - t <= 2]
+#             all_recent_angles = []
+#             if recent_times:
+#                 for i in range(6):
+#                     recent_angles = joint_angles[i][-len(recent_times):]
+#                     all_recent_angles.append(recent_angles)
+#         if recent_times:
+#             for i in range(6):
+#                 axs[i].clear()
+#                 recent_angles = all_recent_angles[i]
+#                 axs[i].plot(recent_times, recent_angles)
+#                 axs[i].set_xlim(recent_times[0], recent_times[-1])
+#                 axs[i].set_ylim(min(recent_angles), max(recent_angles))
+#                 axs[i].set_ylabel(f'Joint {i + 1} Angles')
+#             plt.pause(0.01)  # 短暂暂停以更新图表
+#     else:
+#         print("No data to plot.")
+#
+#
+# print("Start plotting")
+#
+#
+# def loop_plot_joint_angles():
+#     while not rospy.is_shutdown():
+#         plot_joint_angles()
+#
+#
+# # 在单独的线程中运行绘图函数
+# plot_thread = threading.Thread(target=loop_plot_joint_angles)
+# plot_thread.start()
+# plt.show()
+spin_thread.join()

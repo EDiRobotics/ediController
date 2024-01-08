@@ -113,20 +113,49 @@ def getStatus():
     # 20004
     # 20001
     # 8083 # 维护模式 frrts2021 机器人状态采样周期 10ms
+
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.settimeout(5)
     STATUS_PORT = 20001
-    try:
-        s.connect((FR_HOST, STATUS_PORT))
-        s.settimeout(None)
-    except socket.timeout:
-        rospy.logerr(f"Connect to arm status port {STATUS_PORT} timeout, exiting...")
-        rospy.logerr(f"You may need to restart the robot arm...")
+    MAX_RETRIES = 500
+
+    def reconnect_socket():
+        nonlocal s
+        rospy.loginfo("Attempting to reconnect...")
+        s.close()
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(5)  # Initial connection timeout
+        retries = 0
+        while retries < MAX_RETRIES:
+            try:
+                s.connect((FR_HOST, STATUS_PORT))
+                s.settimeout(1)  # Timeout for recv
+                rospy.loginfo("Reconnected to arm status port")
+                return True
+            except socket.error:
+                rospy.logerr(f"Reconnect attempt {retries + 1} failed.")
+                time.sleep(1 + retries)  # Increasing wait time
+                retries += 1
+        return False
+
+    if not reconnect_socket():
+        rospy.logerr("Maximum reconnection attempts reached.")
         exit(1)
-    rospy.loginfo(f"Launch arm status node...")
+    rospy.loginfo("Launch arm status node...")
     idx = 0
+
     while not rospy.is_shutdown():
-        all = s.recv(221)  # 100ms?
+        try:
+            all = s.recv(221)
+            if len(all) < 221:
+                rospy.logerr("Incomplete data received")
+                raise OSError
+        except (socket.timeout, OSError):
+            s.close()
+            rospy.logerr("Connection issue on recv, attempting to reconnect...")
+            reconnect_socket()
+            continue
+
         data = all[0:221]
         try:
             a = np.frombuffer(data, dtype=FeedBackType_2k1)
