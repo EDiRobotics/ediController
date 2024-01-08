@@ -22,7 +22,7 @@ from data_collection.bag_loader import record
 heartbeat_timestamps = {}
 latest_client = None
 
-lmdb_save_path_is_fixed = False
+lmdb_save_path_is_fixed = True
 delete_bag = True
 
 rospy.init_node('record_bags')

@@ -303,8 +303,10 @@ class ArmControlThread(threading.Thread):
             if rospy.Time.now() < next_control_time:
                 sleep_duration = next_control_time - rospy.Time.now()
                 rospy.sleep(sleep_duration)
+                self.control_time = next_control_time
             else:
                 rospy.logwarn("Missing desired control frequency...")
+                self.control_time = rospy.Time.now()
             try:
                 call_count += 1
                 step_with_action_servo(action, control_t)
