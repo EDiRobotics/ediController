@@ -217,7 +217,10 @@ def execute_action(action, demo=False):
 def execute_reset():
     request = TriggerRequest()
     rospy.logdebug(f"Request reset")
-    response = reset_service(request)
-    response: TriggerResponse
+    try:
+        response = reset_service(request)
+    except Exception as e:
+        rospy.logerr(f"Error requesting reset server: {e}")
+        return
     if not response.success:
         rospy.logerr(f"Request reset return errors: {response.message}")
