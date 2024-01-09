@@ -120,7 +120,10 @@ def end_record(process: subprocess.Popen, bag_full_path: str):
     d = {k: str(rospy.get_param(k)) for k in all_params}
     with open(os.path.join(dir_name, 'params_end.json'), 'w') as f:
         json.dump(d, f)
-    terminate_process_and_children(process)
+    try:
+        terminate_process_and_children(process)
+    except Exception as e:
+        rospy.logwarn("Error ending the process, perhaps it has already been terminated.")
     # process.send_signal(signal.SIGINT)
     rospy.set_param('/record/ctrl/recording', False)
     rospy.loginfo(f"\n--- End record {bag_full_path} ---\n")
