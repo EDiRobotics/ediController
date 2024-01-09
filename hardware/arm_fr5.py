@@ -6,6 +6,7 @@ import time
 from ctypes import cdll
 from typing import Dict, List, Tuple
 import numpy as np
+from xmlrpc.client import ProtocolError
 
 try:
     from .arm_fr5_errors import robot_errors
@@ -52,9 +53,16 @@ class FR5:
     """
     Defining the workspace limit
     """
+    # FIXME
+    """ 
+    The workspace should be:
     x_min, x_max = 300, 800
     y_min, y_max = -300, 60
     z_min, z_max = 140, 350
+    """
+    x_min, x_max = -300, 800
+    y_min, y_max = -900, 600
+    z_min, z_max = 140, 1000
     method = "servoj"
 
     _lastHandlerJoint = np.zeros(6)
@@ -147,10 +155,12 @@ class FR5:
                 e_p1 = [0.000, 0.000, 0.000, 0.000]
                 d_p1 = [1.000, 1.000, 1.000, 1.000, 1.000, 1.000]
                 # print(f"Debug: [move_joint] move joint to {joint}, P1 {p1}.")
+                ret = self.robot.MoveJ(joint, p1, 1, 0, 100.0, 180.0, 100.0, e_p1, -1.0, 0, d_p1)
                 self._first = False
                 self._lastHandlerJoint = joint
-                return self.robot.MoveJ(joint, p1, 1, 0, 100.0, 180.0, 100.0, e_p1, -1.0, 0, d_p1)
-
+                return ret
+            except ProtocolError as pe:
+                return -3
             except Exception as e:
                 print(f"[move_joint] An error occurs: ", e)
         else:
@@ -162,6 +172,8 @@ class FR5:
                 if delta_sec > 0.001:
                     time.sleep(delta_sec)
                 return ret
+            except ProtocolError as pe:
+                return -3
             except Exception as e:
                 print(f"[move_joint] An error occurs: ", e)
                 return 14
@@ -185,10 +197,12 @@ class FR5:
                 e_p1 = [0.000, 0.000, 0.000, 0.000]
                 d_p1 = [1.000, 1.000, 1.000, 1.000, 1.000, 1.000]
                 # print(f"Debug: [move_joint] move joint to {joint}, P1 {p1}.")
+                ret = self.robot.MoveJ(joint, p1, 1, 0, 100.0, 180.0, 100.0, e_p1, -1.0, 0, d_p1)
                 self._first = False
                 self._lastHandlerJoint = joint
-                return self.robot.MoveJ(joint, p1, 1, 0, 100.0, 180.0, 100.0, e_p1, -1.0, 0, d_p1)
-
+                return ret
+            except ProtocolError as pe:
+                return -3
             except Exception as e:
                 print(f"[move_joint] An error occurs: ", e)
         else:
@@ -196,12 +210,15 @@ class FR5:
             try:
                 ret = self.robot.ServoJ(joint, 0.0, 0.0, cmdT, 0.0, 0.0)
                 return ret
+            except ProtocolError as pe:
+                return -3
             except Exception as e:
                 print(f"[move_joint_servo] An error occurs: ", e)
                 return 14
 
     def detect_errors(self) -> Tuple[int, List[Dict[int, str]]]:
         rets = self.robot.GetRobotErrorCode()
+        rets += self.robot.GetRobotCurJointsConfig()
         errors = [{ret: robot_errors[str(ret)]} for ret in rets]
         e = 0 if all(ret == 0 for ret in rets) else 1
         return e, errors
@@ -215,7 +232,11 @@ class FR5:
         return {ret: robot_errors[str(ret)]}
 
     def clear_errors(self):
-        return self.robot.ResetAllError()
+        try:
+            return self.robot.ResetAllError()
+        except:
+            return -1
+
 
     def _emaFilterVel(self, handler_joints, last_handler_joints, gamma=0.2, clip_th=2.0):
         handler_joints = np.array(handler_joints)

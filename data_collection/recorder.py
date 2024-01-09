@@ -19,15 +19,16 @@ from std_srvs.srv import Trigger, TriggerResponse, TriggerRequest
 sys.path.append(".")
 from data_collection.bag_loader import record
 
-heartbeat_timestamps = {}
-status_timestamps = None
-latest_client = None
-
 lmdb_save_path_is_fixed = True
 delete_bag = True
 
 rospy.init_node('record_bags')
 rospy.loginfo(f"[record] Initialize records node.")
+
+heartbeat_timestamps = {None: rospy.get_time()}
+status_timestamps = rospy.get_time()
+backend_timestamps = rospy.get_time()
+latest_client = None
 
 bag_save_base = f"dataset/bag"
 rospy.loginfo(f"[record] Rosbag save path is set to {bag_save_base}.")
@@ -55,6 +56,12 @@ save_queue = queue.Queue()
 
 def start_record_service(req):
     global current_process, current_bag_full_path, i
+    current_time = rospy.get_time()
+    heartbeat_checkup = current_time - heartbeat_timestamps[latest_client] > 3
+    status_checkup = current_time - status_timestamps > 3
+    backend_heartbeat_checkup = current_time - backend_timestamps > 1
+    if heartbeat_checkup or status_checkup or backend_heartbeat_checkup:
+        return TriggerResponse(success=False, message="Did not receive status or heartbeat, can not start recording.")
     if current_process is None:
         i += 1
         bag_name = f'all_topics.bag'
@@ -144,6 +151,10 @@ def convert():
             rospy.logerr(f"[record] Saving {bag_full_path} error: {e}...")
 
 
+convert_thread = threading.Thread(target=convert)
+convert_thread.start()
+
+
 def client_heartbeat_callback(msg):
     global latest_client, heartbeat_timestamps
     latest_client = msg.data
@@ -156,8 +167,9 @@ def status_callback(msg):
     status_timestamps = rospy.get_time()
 
 
-convert_thread = threading.Thread(target=convert)
-convert_thread.start()
+def backend_callback(msg):
+    global backend_timestamps
+    backend_timestamps = rospy.get_time()
 
 
 def check_heartbeat():
@@ -167,7 +179,8 @@ def check_heartbeat():
             current_time = rospy.get_time()
             heartbeat_checkup = current_time - heartbeat_timestamps[latest_client] > 3
             status_checkup = current_time - status_timestamps > 3
-            if heartbeat_checkup or status_checkup:
+            backend_heartbeat_checkup = current_time - backend_timestamps > 1
+            if heartbeat_checkup or status_checkup or backend_heartbeat_checkup:
                 rospy.logwarn(f"Heartbeat timeout for client {latest_client}. Ending recording.")
                 end_record_service_response = end_record_service(TriggerRequest())
                 if end_record_service_response.success:
@@ -185,6 +198,8 @@ heartbeat_thread.start()
 
 client_heartbeat_subscriber = rospy.Subscriber("/record/ctrl/client", String, client_heartbeat_callback)
 status_subscriber = rospy.Subscriber("/arm_status/all", String, status_callback)
+backend_subscriber = rospy.Subscriber("/env/ctrl/backend_heartbeat", String, backend_callback)
+
 start_service = rospy.Service('/record/ctrl/start_record_srv', Trigger, start_record_service)
 end_service = rospy.Service('/record/ctrl/end_record_srv', Trigger, end_record_service)
 rospy.spin()

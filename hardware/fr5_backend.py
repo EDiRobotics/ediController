@@ -7,6 +7,7 @@ import sys
 import threading
 import time
 import traceback
+import socket
 from abc import abstractmethod
 import numpy as np
 
@@ -16,6 +17,7 @@ from std_msgs.msg import String, Int32, Float32
 from std_srvs.srv import Trigger, TriggerResponse
 from backend.srv import StringService, StringServiceRequest, StringServiceResponse
 from hardware.arm_fr5 import fr5
+from xmlrpc.client import ProtocolError
 
 try:
     robot_controller = fr5()
@@ -271,6 +273,12 @@ joint_angles = [[] for _ in range(6)]
 times = []
 plot_lock = threading.Lock()
 
+heartbeat_publisher = rospy.Publisher('/env/ctrl/backend_heartbeat', String, queue_size=10)
+
+
+def send_heartbeat():
+    heartbeat_publisher.publish("")
+
 
 class ArmControlThread(threading.Thread):
     def __init__(self):
@@ -280,6 +288,8 @@ class ArmControlThread(threading.Thread):
     def run(self):
         call_count = 0
         loop_count = 0
+        failed_count = 0
+        clear_errors_count = 0
         start_time = time.time()
         robot_controller.reset_first()
         self.control_time = rospy.Time.now()
@@ -291,11 +301,21 @@ class ArmControlThread(threading.Thread):
                 loop_frequency = loop_count / elapsed_time
                 rospy.loginfo(f"Actual frequency: {frequency} Hz, Loop frequency: {loop_frequency}")
                 call_count = 0
+                failed_count = 0
                 loop_count = 0
                 start_time = time.time()
             next_control_time = self.control_time + rospy.Duration(nsecs=control_t_nsecs)
             action = traj_server.get_action(next_control_time)
-
+            if robot_controller.clear_errors() != 0:
+                clear_errors_count += 1
+                if clear_errors_count > 10:
+                    robot_controller.reconnect()
+                    robot_controller.reset_first()
+                rospy.logfatal(f"Fatal error detected which cannot be cleared!")
+                continue
+            # TODO: Regular send heartbeat if a separate thread which will save time.
+            clear_errors_count = 0
+            send_heartbeat()
             if action is None:
                 rospy.logerr("Get action is None!")
                 self.control_time = rospy.Time.now()
@@ -310,7 +330,14 @@ class ArmControlThread(threading.Thread):
             try:
                 call_count += 1
                 step_with_action_servo(action, control_t)
+            except socket.error as e:
+                robot_controller.reset_first()
+                robot_controller.reconnect()
+                rospy.logfatal(f"ProtocolError happened")
+            except ProtocolError as pe:
+                pass
             except Exception as e:
+                failed_count += 1
                 rospy.logwarn(f"Error happened: {e}")
                 self.control_time = rospy.Time.now()
 
@@ -427,17 +454,15 @@ def switch(event):
 
 
 def rst_service(request):
-    try:
-        robot_controller.clear_errors()
-        robot_controller.reset_first()
+    if robot_controller.clear_errors() == 0:
         return TriggerResponse(
             success=True,
             message=""
         )
-    except Exception as e:
+    else:
         return TriggerResponse(
             success=False,
-            message=f"{str(e)}"
+            message=f"Cannot reset now."
         )
 
 
@@ -445,54 +470,15 @@ service_rst = rospy.Service('/env/reset_srv', Trigger, rst_service)
 service_replay = rospy.Service('/env/step/replay_action_srv', StringService, handle_service_replay)
 service_demo = rospy.Service('/env/step/demo_action_srv', StringService, handle_service_demo)
 service_policy = rospy.Service('/env/step/policy_action_srv', StringService, handle_service_policy)
-timer = rospy.Timer(rospy.Duration(nsecs=100), switch)
+timer = rospy.Timer(rospy.Duration(nsecs=100000000), switch)
+# heartbeat_timer = rospy.Timer(rospy.Duration(secs=1), send_heartbeat)
 rospy.loginfo(f"All servers registered...")
 
+# def spin():
+#     rospy.spin()
+#
+#
+# spin_thread = threading.Thread(target=spin)
+# spin_thread.start()
 
-def spin():
-    rospy.spin()
-
-
-spin_thread = threading.Thread(target=spin)
-spin_thread.start()
-
-# plt.ion()
-# fig, axs = plt.subplots(6, 1, figsize=(10, 15))
-#
-#
-# def plot_joint_angles():
-#     current_time = time.time()
-#     if times:
-#         with plot_lock:
-#             recent_times = [t - current_time for t in times if current_time - t <= 2]
-#             all_recent_angles = []
-#             if recent_times:
-#                 for i in range(6):
-#                     recent_angles = joint_angles[i][-len(recent_times):]
-#                     all_recent_angles.append(recent_angles)
-#         if recent_times:
-#             for i in range(6):
-#                 axs[i].clear()
-#                 recent_angles = all_recent_angles[i]
-#                 axs[i].plot(recent_times, recent_angles)
-#                 axs[i].set_xlim(recent_times[0], recent_times[-1])
-#                 axs[i].set_ylim(min(recent_angles), max(recent_angles))
-#                 axs[i].set_ylabel(f'Joint {i + 1} Angles')
-#             plt.pause(0.01)  # 短暂暂停以更新图表
-#     else:
-#         print("No data to plot.")
-#
-#
-# print("Start plotting")
-#
-#
-# def loop_plot_joint_angles():
-#     while not rospy.is_shutdown():
-#         plot_joint_angles()
-#
-#
-# # 在单独的线程中运行绘图函数
-# plot_thread = threading.Thread(target=loop_plot_joint_angles)
-# plot_thread.start()
-# plt.show()
-spin_thread.join()
+rospy.spin()
