@@ -19,45 +19,142 @@ from backend.srv import StringService, StringServiceRequest, StringServiceRespon
 from hardware.arm_fr5 import fr5
 from xmlrpc.client import ProtocolError
 
-try:
-    robot_controller = fr5()
-except Exception as e:
-    rospy.logerr(f"Error occurs when launching Real Environment Backend: {e}")
-    exit(0)
-
 rospy.init_node('backend', anonymous=True)
 rospy.loginfo(f"Launching Real Environment Backend...")
 
-control_freq = 100
-control_t = 1 / control_freq
-control_t_nsecs = int(control_t * 1000000000)
-idx = 0
-obs_time = rospy.Time.now()
+
+class RobotArmBackend(abc.ABC):
+
+    def __init__(self):
+        pass
+
+    @abstractmethod
+    def act(self, action):
+        raise NotImplementedError
+
+    @abstractmethod
+    def reset(self):
+        raise NotImplementedError
 
 
-def step_with_action_servo(action, cmd_time):
-    """
-    :param action: 7 length list. The first 6 item contain the 6 joint angle,
-    :param cmd_time:
-    the last item contains the gripper proportion.
-    :return: a dict containing some information
-    """
-    joint = action[:6]
-    gripper = action[-1]
-    publisher_gripper.publish(gripper)
-    # robot_controller.move_joint(joint)
-    robot_controller.move_joint_servo(joint, cmd_time)
-    # robot_controller.set_gripper(gripper)
+class HeartBeatThread(threading.Thread):
+    def __init__(self, publisher):
+        threading.Thread.__init__(self)
+        self.publish = True
+        self.heartbeat_publisher = publisher
+
+    def run(self) -> None:
+        rospy.Duration(secs=1).sleep()
+        if self.publish:
+            self.heartbeat_publisher.publish("")
+
+    def stop_publishing(self):
+        self.publish = False
 
 
-topic_name = "/arm_status/gripper_pos"
-publisher_gripper = rospy.Publisher(topic_name, Float32, queue_size=5)
-topic_name = "/env/step/idx"
-publisher_idx = rospy.Publisher(topic_name, Int32, queue_size=100)
-topic_name = "/env/step/action"
-publisher_action = rospy.Publisher(topic_name, String, queue_size=100)
-topic_name = "/env/step/info"
-publisher_info = rospy.Publisher(topic_name, String, queue_size=100)
+def rst_service(request):
+    if robot_arm.reset() == 0:
+        return TriggerResponse(
+            success=True,
+            message=""
+        )
+    else:
+        return TriggerResponse(
+            success=False,
+            message=f"Cannot reset now."
+        )
+
+
+def handle_service_demo(request):
+    if rospy.get_param("/env/ctrl/demo", False):
+        return handle_service(request)
+    else:
+        return StringServiceResponse(success=False, message="Not Allowed")
+
+
+def handle_service_policy(request):
+    if rospy.get_param("/env/ctrl/policy", False):
+        return handle_service(request)
+    else:
+        return StringServiceResponse(success=False, message="Not Allowed")
+
+
+def handle_service_replay(request):
+    if rospy.get_param("/env/ctrl/replay", False):
+        return handle_service(request)
+    else:
+        return StringServiceResponse(success=False, message="Not Allowed")
+
+
+def switch(event):
+    global last_switch_state
+    current_switch_state = rospy.get_param("/env/ctrl/switch")
+    if current_switch_state not in ["policy", "demo", "replay"]:
+        current_switch_state = last_switch_state
+        rospy.set_param("/env/ctrl/switch", current_switch_state)
+
+    if current_switch_state != last_switch_state:
+        last_switch_state = current_switch_state
+
+        new_policy_state = (current_switch_state == "policy")
+        new_demo_state = (current_switch_state == "demo")
+        new_replay_state = (current_switch_state == "replay")
+
+        rospy.set_param("/env/ctrl/policy", new_policy_state)
+        rospy.set_param("/env/ctrl/demo", new_demo_state)
+        rospy.set_param("/env/ctrl/replay", new_replay_state)
+
+        if new_policy_state:
+            rospy.loginfo("Policy is now enabled.")
+        else:
+            rospy.loginfo("Policy is now disabled.")
+
+        if new_demo_state:
+            rospy.loginfo("Demo is now enabled.")
+        else:
+            rospy.loginfo("Demo is now disabled.")
+
+        if new_replay_state:
+            rospy.loginfo("Replay is now enabled.")
+        else:
+            rospy.loginfo("Replay is now disabled.")
+
+    assert (int(rospy.get_param("/env/ctrl/policy")) +
+            int(rospy.get_param("/env/ctrl/demo")) +
+            int(rospy.get_param("/env/ctrl/replay")) <= 1
+            )
+
+
+def handle_service(request: StringServiceRequest):
+    global idx, last_switch_state, obs_time
+    info = {"error": 0}
+    try:
+        action_str = request.message
+        action = json.loads(action_str)
+        action = [float(a) for a in action]
+    except json.JSONDecodeError as e:
+        rospy.logwarn(f"Error json loads: {e}")
+        error_msg = json.dumps({"error": "JSON decode error"})
+        return StringServiceResponse(success=False, message=error_msg)
+    idx += 1
+    publisher_idx.publish(idx)
+    action_time = rospy.Time.now()
+    action_record = {"idx": idx, "action": action,
+                     "timestamp": action_time.to_time(),
+                     "obs_timestamp": obs_time.to_time(),
+                     "mode": last_switch_state}
+    publisher_action.publish(json.dumps(action_record))
+    err = robot_arm.act(action)
+    info["error"] = err
+    success = not bool(err)
+    obs_time = rospy.Time.now()
+    idx += 1
+    publisher_idx.publish(idx)
+    info_str = json.dumps(info)
+    return StringServiceResponse(
+        success=success,
+        message=info_str
+    )
 
 
 class Trajectory(abc.ABC):
@@ -129,11 +226,14 @@ class DiscreteTrajectory(Trajectory):
 
 
 class TrajectoryServer:
-    """
-    Suppose the trajectory optimizer is de
-    """
 
-    def __init__(self, optimize_interval=0.02, traj_length=0.1, config=None):
+    def __init__(self, control_freq=100, optimize_interval=0.02, traj_length=0.1, config=None):
+        control_t = 1 / control_freq
+        control_t_nsecs = int(control_t * 1000000000)
+        self.control_freq = control_freq
+        self.control_t = control_t
+        self.control_t_nsecs = control_t_nsecs
+
         if config is None:
             config = {}
         self.config = config
@@ -154,16 +254,15 @@ class TrajectoryServer:
             rospy.sleep(self.optimize_interval)
 
     def _optimize_traj(self):
-        pace_duration = rospy.Duration(nsecs=control_t_nsecs)
+        pace_duration = rospy.Duration(nsecs=self.control_t_nsecs)
         while not self.action_queue.empty():
             action_plans, timestamp = self.action_queue.get()
-            start_timestamp = timestamp + rospy.Duration(nsecs=control_t_nsecs)
+            start_timestamp = timestamp + rospy.Duration(nsecs=self.control_t_nsecs)
             self.raw_trajectories.append(DiscreteTrajectory(start_timestamp, action_plans, pace_duration))
         now = rospy.Time.now()
         self.raw_trajectories = [traj for traj in self.raw_trajectories if traj.end > now]
         end_time = now + self.traj_length
         current_time = now
-        pace_duration = rospy.Duration(nsecs=control_t_nsecs)
         ema_positions = []
 
         while current_time <= end_time:
@@ -217,81 +316,26 @@ class TrajectoryServer:
         return None
 
 
-class SimpleTrajectoryServer(TrajectoryServer):
-
-    def _optimize_traj(self):
-        pace_duration = rospy.Duration(nsecs=control_t_nsecs)
-        while not self.action_queue.empty():
-            action_plans, timestamp = self.action_queue.get()
-            start_timestamp = timestamp + rospy.Duration(nsecs=control_t_nsecs)
-            if len(action_plans) == 1:
-                n = 20
-                action_plans = np.tile(action_plans, (n, 1))
-            self.raw_trajectories.append(DiscreteTrajectory(start_timestamp, action_plans, pace_duration))
-        now = rospy.Time.now()
-        self.raw_trajectories = [traj for traj in self.raw_trajectories if traj.end > now]
-        end_time = now + self.traj_length
-        current_time = now
-        pace_duration = rospy.Duration(nsecs=control_t_nsecs)
-        ema_positions = []
-
-        while current_time <= end_time:
-            valid_positions = []
-            weights = []
-            total_weight = 0
-
-            # Gather positions and calculate weights
-            for traj in self.raw_trajectories:
-                position = traj.get_position(current_time)
-                if position is not None:
-                    valid_positions.append(position)
-                    weight = np.exp(-(now - traj.start).to_sec())
-                    weights.append(weight)
-                    total_weight += weight
-
-            # Normalize weights and calculate weighted sum
-            if total_weight > 0 and valid_positions:
-                normalized_weights = [w / total_weight for w in weights]
-                weighted_sum = sum(np.array(pos) * w for pos, w in zip(valid_positions, normalized_weights))
-                ema_positions.append(weighted_sum)
-            else:
-                # TODO
-                if self.last_position is not None:
-                    ema_positions.append(self.last_position)
-                else:
-                    break
-
-            current_time += pace_duration
-        if ema_positions:
-            self.first_trajectory = DiscreteTrajectory(now, ema_positions, pace_duration)
-            self.optimized_trajectory = self._spline_optimize_traj(self.first_trajectory)
-
-
-traj_server = SimpleTrajectoryServer()
-
-joint_angles = [[] for _ in range(6)]
-times = []
-plot_lock = threading.Lock()
-
-heartbeat_publisher = rospy.Publisher('/env/ctrl/backend_heartbeat', String, queue_size=10)
-
-
-def send_heartbeat():
-    heartbeat_publisher.publish("")
-
-
 class ArmControlThread(threading.Thread):
-    def __init__(self):
+    def __init__(self, robot, traj_server, control_freq, heartbeat_thread=None):
         threading.Thread.__init__(self)
+        self.robot = robot
+        self.traj_server = traj_server
+
+        control_t = 1 / control_freq
+        control_t_nsecs = int(control_t * 1000000000)
+        self.control_freq = control_freq
+        self.control_t = control_t
+        self.control_t_nsecs = control_t_nsecs
+
         self.control_time = None
+        self.heartbeat_thread = heartbeat_thread
+        self.err = 0
 
     def run(self):
         call_count = 0
         loop_count = 0
-        failed_count = 0
-        clear_errors_count = 0
         start_time = time.time()
-        robot_controller.reset_first()
         self.control_time = rospy.Time.now()
         while not rospy.is_shutdown():
             loop_count += 1
@@ -301,21 +345,10 @@ class ArmControlThread(threading.Thread):
                 loop_frequency = loop_count / elapsed_time
                 rospy.loginfo(f"Actual frequency: {frequency} Hz, Loop frequency: {loop_frequency}")
                 call_count = 0
-                failed_count = 0
                 loop_count = 0
                 start_time = time.time()
-            next_control_time = self.control_time + rospy.Duration(nsecs=control_t_nsecs)
-            action = traj_server.get_action(next_control_time)
-            if robot_controller.clear_errors() != 0:
-                clear_errors_count += 1
-                if clear_errors_count > 10:
-                    robot_controller.reconnect()
-                    robot_controller.reset_first()
-                rospy.logfatal(f"Fatal error detected which cannot be cleared!")
-                continue
-            # TODO: Regular send heartbeat if a separate thread which will save time.
-            clear_errors_count = 0
-            send_heartbeat()
+            next_control_time = self.control_time + rospy.Duration(nsecs=self.control_t_nsecs)
+            action = self.traj_server.get_action(next_control_time)
             if action is None:
                 rospy.logerr("Get action is None!")
                 self.control_time = rospy.Time.now()
@@ -327,158 +360,71 @@ class ArmControlThread(threading.Thread):
             else:
                 rospy.logwarn("Missing desired control frequency...")
                 self.control_time = rospy.Time.now()
-            try:
-                call_count += 1
-                step_with_action_servo(action, control_t)
-            except socket.error as e:
-                robot_controller.reset_first()
-                robot_controller.reconnect()
-                rospy.logfatal(f"ProtocolError happened")
-            except ProtocolError as pe:
-                pass
-            except Exception as e:
-                failed_count += 1
-                rospy.logwarn(f"Error happened: {e}")
-                self.control_time = rospy.Time.now()
+            call_count += 1
+            self.robot.move_servo(action, self.control_t)
+            err = 0
+            if err:
+                if self.heartbeat_thread is not None:
+                    self.heartbeat_thread.stop_publishing()
+                self.err = err
+
+    def get_error(self):
+        return self.err
 
 
-control_thread = ArmControlThread()
-control_thread.start()
+class ActionLoopRobotArmBackend(RobotArmBackend):
+    control_freq = 100
+
+    def __init__(self, robot):
+        super().__init__()
+        try:
+            robot_controller = fr5()
+        except Exception as e:
+            rospy.logerr(f"Error occurs when launching Real Environment Backend: {e}")
+            exit(0)
+
+        control_t = 1 / self.control_freq
+        control_t_nsecs = int(control_t * 1000000000)
+        self.control_t = control_t
+        self.control_t_nsecs = control_t_nsecs
+        self.robot = robot
+        self.traj_server = TrajectoryServer(self.control_freq)
+        self.heartbeat_thread = HeartBeatThread(heartbeat_publisher)
+        self.heartbeat_thread.start()
+        self.control_thread = ArmControlThread(self.robot, self.traj_server, self.control_freq, self.heartbeat_thread)
+        self.control_thread.start()
+
+    def act(self, action):
+        self.traj_server.add_action(action)
+        err = self.control_thread.get_error()
+        return err
+
+    def reset(self):
+        pass
 
 
-def handle_service(request: StringServiceRequest):
-    global idx, last_switch_state, obs_time
-    info = {"error": 0}
-    try:
-        action_str = request.message
-        action = json.loads(action_str)
-        action = [float(a) for a in action]
-    except json.JSONDecodeError as e:
-        rospy.logwarn(f"Error json loads: {e}")
-        error_msg = json.dumps({"error": "JSON decode error"})
-        return StringServiceResponse(success=False, message=error_msg)
-    if not robot_controller.check_valid(action):
-        rospy.logwarn(f"Action {action} is not valid...")
-        info["error"] = 4
-        error_msg = json.dumps(info)
-        return StringServiceResponse(success=False, message=error_msg)
-    # FIXME: Multi-thread problem
-    # action = robot_controller.revise_action(action)
-    idx += 1
-    publisher_idx.publish(idx)
-    action_time = rospy.Time.now()
-    action_record = {"idx": idx, "action": action,
-                     "timestamp": action_time.to_time(),
-                     "obs_timestamp": obs_time.to_time(),
-                     "mode": last_switch_state}
-    publisher_action.publish(json.dumps(action_record))
-    traj_server.add_action(action)
-    obs_time = rospy.Time.now()
-    idx += 1
-    publisher_idx.publish(idx)
-    info_str = json.dumps(info)
-    return StringServiceResponse(
-        success=True,
-        message=info_str
-    )
+robot_arm = ActionLoopRobotArmBackend(fr5())
 
+idx = 0
+obs_time = rospy.Time.now()
+topic_name = "/env/step/idx"
+publisher_idx = rospy.Publisher(topic_name, Int32, queue_size=100)
+topic_name = "/env/step/action"
+publisher_action = rospy.Publisher(topic_name, String, queue_size=100)
+topic_name = "/env/step/info"
+publisher_info = rospy.Publisher(topic_name, String, queue_size=100)
 
-def handle_service_demo(request):
-    if rospy.get_param("/env/ctrl/demo", False):
-        return handle_service(request)
-    else:
-        return StringServiceResponse(success=False, message="Not Allowed")
-
-
-def handle_service_policy(request):
-    if rospy.get_param("/env/ctrl/policy", False):
-        return handle_service(request)
-    else:
-        return StringServiceResponse(success=False, message="Not Allowed")
-
-
-def handle_service_replay(request):
-    if rospy.get_param("/env/ctrl/replay", False):
-        return handle_service(request)
-    else:
-        return StringServiceResponse(success=False, message="Not Allowed")
-
-
+heartbeat_publisher = rospy.Publisher('/env/ctrl/backend_heartbeat', String, queue_size=10)
 last_switch_state = rospy.get_param("/env/ctrl/switch", "policy")
 rospy.set_param("/env/ctrl/switch", last_switch_state)
 rospy.set_param("/env/ctrl/policy", False)
 rospy.set_param("/env/ctrl/demo", False)
 rospy.set_param("/env/ctrl/replay", False)
 rospy.set_param(f"/env/ctrl/{last_switch_state}", True)
-
-
-def switch(event):
-    global last_switch_state
-    current_switch_state = rospy.get_param("/env/ctrl/switch")
-    if current_switch_state not in ["policy", "demo", "replay"]:
-        current_switch_state = last_switch_state
-        rospy.set_param("/env/ctrl/switch", current_switch_state)
-
-    if current_switch_state != last_switch_state:
-        last_switch_state = current_switch_state
-
-        robot_controller.reset_first()
-        new_policy_state = (current_switch_state == "policy")
-        new_demo_state = (current_switch_state == "demo")
-        new_replay_state = (current_switch_state == "replay")
-
-        rospy.set_param("/env/ctrl/policy", new_policy_state)
-        rospy.set_param("/env/ctrl/demo", new_demo_state)
-        rospy.set_param("/env/ctrl/replay", new_replay_state)
-        robot_controller.reset_first()
-
-        if new_policy_state:
-            rospy.loginfo("Policy is now enabled.")
-        else:
-            rospy.loginfo("Policy is now disabled.")
-
-        if new_demo_state:
-            rospy.loginfo("Demo is now enabled.")
-        else:
-            rospy.loginfo("Demo is now disabled.")
-
-        if new_replay_state:
-            rospy.loginfo("Replay is now enabled.")
-        else:
-            rospy.loginfo("Replay is now disabled.")
-
-    assert (int(rospy.get_param("/env/ctrl/policy")) +
-            int(rospy.get_param("/env/ctrl/demo")) +
-            int(rospy.get_param("/env/ctrl/replay")) <= 1
-            )
-
-
-def rst_service(request):
-    if robot_controller.clear_errors() == 0:
-        return TriggerResponse(
-            success=True,
-            message=""
-        )
-    else:
-        return TriggerResponse(
-            success=False,
-            message=f"Cannot reset now."
-        )
-
-
 service_rst = rospy.Service('/env/reset_srv', Trigger, rst_service)
 service_replay = rospy.Service('/env/step/replay_action_srv', StringService, handle_service_replay)
 service_demo = rospy.Service('/env/step/demo_action_srv', StringService, handle_service_demo)
 service_policy = rospy.Service('/env/step/policy_action_srv', StringService, handle_service_policy)
 timer = rospy.Timer(rospy.Duration(nsecs=100000000), switch)
-# heartbeat_timer = rospy.Timer(rospy.Duration(secs=1), send_heartbeat)
 rospy.loginfo(f"All servers registered...")
-
-# def spin():
-#     rospy.spin()
-#
-#
-# spin_thread = threading.Thread(target=spin)
-# spin_thread.start()
-
 rospy.spin()
