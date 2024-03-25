@@ -3,6 +3,7 @@ import pdb
 import sys
 import threading
 import time
+import traceback
 from ctypes import cdll
 from typing import Dict, List, Tuple
 import numpy as np
@@ -19,6 +20,29 @@ frrpc = cdll.LoadLibrary(path)
 import frrpc
 
 
+class RetryingWrapper:
+    def __init__(self, robot, max_retries=30, retry_delay=0):
+        self.robot = robot
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
+
+    def __getattr__(self, name):
+        def wrapped_method(*args, **kwargs):
+            retries = 0
+            while retries < self.max_retries:
+                try:
+                    method = getattr(self.robot, name)
+                    return method(*args, **kwargs)
+                except ProtocolError as pe:
+                    retries += 1
+                    if retries == self.max_retries:
+                        raise pe
+                    if self.retry_delay > 0:
+                        time.sleep(self.retry_delay)
+
+        return wrapped_method
+
+
 class FR5:
     """
     Defining the workspace limit
@@ -27,60 +51,130 @@ class FR5:
     The workspace should be:
     x_min, x_max = 300, 800
     y_min, y_max = -300, 60
-    z_min, z_max = 140, 350
+    z_min, z_max = 150, 350
     """
-    x_min, x_max = -300, 800
-    y_min, y_max = -900, 600
-    z_min, z_max = 140, 1000
 
-    _filter_width = 6
+    x_min, x_max = 250, 800
+    y_min, y_max = -300, 60
+    z_min, z_max = 130, 350
+
+    gamma = 0.1
+    clip_vel = np.array([15, 15, 30, 100, 50, 50])
+    clip_acc = np.array([200, 200, 200, 500, 300, 800])
+
+    safe_bound = 30
+    x_min_soft, x_max_soft = x_min + safe_bound, x_max - safe_bound
+    y_min_soft, y_max_soft = y_min + safe_bound, y_max - safe_bound
+    z_min_soft, z_max_soft = z_min + safe_bound, z_max - safe_bound
+    _filter_width = 200
 
     def __init__(self, robot_ip):
         self.robot_ip = robot_ip
-        self.robot = frrpc.RPC(self.robot_ip)
-        # self.robot = ThreadSafeProxy(self.robot)
+        self.robot = RetryingWrapper(frrpc.RPC(self.robot_ip))
+        self._last_pos = np.zeros((self._filter_width, 6))
+        self._last_vel = np.zeros((self._filter_width, 6))
+        self._last_acc = np.zeros((self._filter_width, 6))
+        self._last_cart_pos = np.zeros((self._filter_width, 6))
+        self._last_cart_pos_d = np.zeros((self._filter_width, 6))
+        self._last_cart_vel = np.zeros((self._filter_width, 6))
+        self._last_cart_vel_d = np.zeros((self._filter_width, 6))
+        self._last_cart_acc = np.zeros((self._filter_width, 6))
+        self._last_cart_acc_d = np.zeros((self._filter_width, 6))
+        self.initialize()
+
+    def initialize(self):
         print(f'\033[37m[__init__]: Robot initializing.. \033[0m')
         # gripper 14 cm
         gripper_length = 13.0
         # TODO: default_pose not as expected
         default_pose = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         gripper_pose = [0.0, 0.0, float(gripper_length), 0.0, 0.0, 0.0]
+        self.robot.ResetAllError()
         self.robot.SetToolCoord(0, default_pose, 0, 0)
         self.robot.SetToolCoord(1, gripper_pose, 0, 0)
         self.move_end([600, 0, 300, -180, 0, 90])
         self.close_gripper()
-        joint_pos = self.robot.GetActualJointPosRadian(0)
-        # joint_pos = self.robot.GetActualJointPosDegree(0)
+        joint_pos = self.robot.GetActualJointPosDegree(0)[1:]
         joint_pos = np.array(joint_pos).reshape(1, 6)
         self._last_pos = np.tile(joint_pos, (self._filter_width, 1))
-        self._last_vel = np.zeros(self._filter_width, 6)
+        self._last_vel = np.zeros((self._filter_width, 6))
+        self._last_acc = np.zeros((self._filter_width, 6))
+        self._last_cart_pos = np.zeros((self._filter_width, 6))
+        self._last_cart_pos_d = np.zeros((self._filter_width, 6))
+        self._last_cart_vel = np.zeros((self._filter_width, 6))
+        self._last_cart_vel_d = np.zeros((self._filter_width, 6))
+        self._last_cart_acc = np.zeros((self._filter_width, 6))
+        self._last_cart_acc_d = np.zeros((self._filter_width, 6))
         print(f'\033[37m[__init__]: Robot initialized. \033[0m')
 
     def move(self, action, time_t):
         self.set_gripper(action[-1])
-        self.move_servo(action[:6], time_t)
+        return self.move_servo(action[:6], time_t)
 
     def move_servo(self, joint, time_t):
-        if len(joint) != 6:
-            print(f"[move_joint_servo] joint is {joint} which has invalid length")
-            return 3
-        loc = self.robot.GetForwardKin(joint)[1:]
-        x, y, z = loc[0], loc[1], loc[2]
-        if not (self.x_min <= x <= self.x_max and self.y_min <= y <= self.y_max and self.z_min <= z <= self.z_max):
-            print(f"[move_joint_servo] Out of workspace! joint \n{joint}, loc \n{loc}, force return.")
-            print(
-                f"Workspace limits: X({self.x_min}, {self.x_max}), Y({self.y_min}, {self.y_max}), Z({self.z_min}, {self.z_max})")
-            return 14
-        joint = self._ema_joint(joint, time_t)
         try:
+            # if self.robot.ResetAllError() != 0:
+            #     pdb.set_trace()
+            #     print(f"[move_joint._servo] Cannot clear errors, need to restart")
+            #     return -1
+
+            loc = self.robot.GetForwardKin(joint)[1:]
+            desired_loc = [item for item in loc]
+            x, y, z = loc[0], loc[1], loc[2]
+            out_of_workspace = False
+            if not (
+                    self.x_min_soft <= x <= self.x_max_soft and self.y_min_soft <= y <= self.y_max_soft and self.z_min_soft <= z <= self.z_max_soft):
+                desired_loc[0] = max(self.x_min_soft, min(self.x_max_soft, loc[0]))
+                desired_loc[1] = max(self.y_min_soft, min(self.y_max_soft, loc[1]))
+                desired_loc[2] = max(self.z_min_soft, min(self.z_max_soft, loc[2]))
+                joint = self.robot.GetInverseKin(0, [float(i) for i in desired_loc], -1)[1:]
+                out_of_workspace = True
+            gamma = self.gamma if not out_of_workspace else 0.4
+            joint = self._ema_joint(joint, time_t, gamma, self.clip_vel, self.clip_acc)
+            current_vel = (np.array(joint) - self._last_pos[-1]) / time_t
+            current_acc = (current_vel - self._last_vel[-1]) / time_t
+
+            # self._last_acc = np.roll(self._last_acc, -1, axis=0)
+            # self._last_acc[-1] = current_acc
+            self._last_vel = np.roll(self._last_vel, -1, axis=0)
+            self._last_vel[-1] = current_vel
+            self._last_pos = np.roll(self._last_pos, -1, axis=0)
+            self._last_pos[-1] = joint
+
+            loc = self.robot.GetForwardKin(joint)[1:]
+            x, y, z = loc[0], loc[1], loc[2]
+
+            # self._last_cart_pos = np.roll(self._last_cart_pos, -1, axis=0)
+            # self._last_cart_pos[-1] = loc
+            # self._last_cart_vel = np.roll(self._last_cart_vel, -1, axis=0)
+            # self._last_cart_vel[-1] = (self._last_cart_pos[-1] - self._last_cart_pos[-2]) / time_t
+            # self._last_cart_acc = np.roll(self._last_cart_acc, -1, axis=0)
+            # self._last_cart_acc[-1] = (self._last_cart_vel[-1] - self._last_cart_vel[-2]) / time_t
+            #
+            # self._last_cart_pos_d = np.roll(self._last_cart_pos_d, -1, axis=0)
+            # self._last_cart_pos_d[-1] = desired_loc
+            # self._last_cart_vel_d = np.roll(self._last_cart_vel_d, -1, axis=0)
+            # self._last_cart_vel_d[-1] = (self._last_cart_pos_d[-1] - self._last_cart_pos[-2]) / time_t
+            # self._last_cart_acc_d = np.roll(self._last_cart_acc_d, -1, axis=0)
+            # self._last_cart_acc_d[-1] = (self._last_cart_vel_d[-1] - self._last_cart_vel[-2]) / time_t
+
+            if not (self.x_min <= x <= self.x_max and self.y_min <= y <= self.y_max and self.z_min <= z <= self.z_max):
+                print(f"[move_joint_servo] Out of workspace! joint \n{joint}, loc \n{loc}.")
+                # pdb.set_trace()
+                self.initialize()
+                return 0
             ret = self.robot.ServoJ(joint, 0.0, 0.0, time_t, 0.0, 0.0)
+
             return ret
         except ProtocolError as pe:
             # return -3
             return 0
         except Exception as e:
+            print("_last_pos", self._last_pos)
+            print("_last_vel", self._last_vel)
+            traceback.print_exc()
             print(f"[move_joint_servo] An error occurs: ", e)
-            return 14
+            return 0
 
     def reconnect(self):
         self.robot = frrpc.RPC(self.robot_ip)
@@ -130,22 +224,20 @@ class FR5:
         except:
             return -1
 
-    def _ema_joint(self, joint, time_t, gamma=0.2, clip_acc=2.0):
+    def _ema_joint(self, joint, time_t, gamma=0.2, clip_vel=None, clip_acc=None):
+
         current_vel = (np.array(joint) - self._last_pos[-1]) / time_t
         current_vel = gamma * current_vel + (1 - gamma) * self._last_vel[-1]
+
         current_acc = (current_vel - self._last_vel[-1]) / time_t
+        if clip_acc is not None:
+            current_acc = np.clip(current_acc, -clip_acc, clip_acc)
 
-        if np.linalg.norm(current_acc) > clip_acc:
-            current_acc = (current_acc / np.linalg.norm(current_acc)) * clip_acc
-            current_vel = self._last_vel[-1] + current_acc * time_t
+        current_vel = self._last_vel[-1] + current_acc * time_t
+        if clip_vel is not None:
+            current_vel = np.clip(current_vel, -clip_vel, clip_vel)
 
-        updated_joint = self._last_pos[-1] + current_vel * time_t + 0.5 * current_acc * (time_t ** 2)
-
-        self._last_vel = np.roll(self._last_vel, -1, axis=0)
-        self._last_vel[-1] = current_vel
-        self._last_pos = np.roll(self._last_pos, -1, axis=0)
-        self._last_pos[-1] = updated_joint
-
+        updated_joint = self._last_pos[-1] + current_vel * time_t
         return updated_joint.tolist()
 
 
@@ -153,6 +245,7 @@ def fr5():
     try:
         robot = FR5('192.168.1.10')
     except:
+        traceback.print_exc()
         exit("Can not connect to robot, exiting!")
     return robot
 

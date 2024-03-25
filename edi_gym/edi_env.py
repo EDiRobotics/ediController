@@ -8,13 +8,7 @@ import rospy
 
 sys.path.append(".")
 
-try:
-    from edi_gym.edi_env_ros_interface import *
-except:
-    traceback.print_exc()
-    time.sleep(1)
-    print("Error on importing rospy...")
-    exit(1)
+from edi_gym.edi_env_ros_interface import *
 
 
 class HeartbeatClient:

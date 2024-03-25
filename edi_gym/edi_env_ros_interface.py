@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+import pdb
+
 import time
 
 import rospy
@@ -9,7 +11,6 @@ import threading
 import json
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List
-
 import rospy
 import message_filters
 from std_msgs.msg import String
@@ -24,15 +25,12 @@ except:
 
 global_image_caches = {}
 global_status_caches = {}
-cv_bridge = CvBridge()
+bridge = CvBridge()
 
 
 def _listener():
     rospy.spin()
 
-
-action_topic = '/sim_env/step/action'
-action_publisher = rospy.Publisher(action_topic, String, queue_size=1)
 
 demo_service_srv = '/env/step/demo_action_srv'
 action_service_demo = rospy.ServiceProxy(demo_service_srv, StringService)
@@ -48,6 +46,13 @@ def register_servers():
     rospy.wait_for_service(policy_service_srv)
     rospy.wait_for_service(reset_service_srv)
 
+
+# def register_subscribers(topics):
+#     for k, topics_info in topics.items():
+#         topic_name, topic_type, process_function, queue_size, cache_size = topics_info
+#         sub = message_filters.Subscriber(topic_name, topic_type, queue_size=queue_size)
+#         cache = message_filters.Cache(sub, cache_size)
+#         global_caches[k] = (cache, process_function)
 
 def register_subscribers(image_topics, status_topic="/arm_status/all",
                          queue_size=1, status_cache_size=50, image_cache_size=50):
@@ -105,9 +110,12 @@ def process_single_cache_latest(cache, timestamp_start, name=None):
 
 def obtain_obs_latest(timeout=1) -> (Dict, Dict):
     timestamp_start = rospy.Time.now()
+    status = None
 
     while not rospy.is_shutdown():
         if rospy.Time.now() - timestamp_start > rospy.Duration(timeout):
+            if status is not None:
+                rospy.logerr("Image is None")
             return None, {k: None for k in global_image_caches}
         status = None
         for _, cache in global_status_caches.items():
@@ -126,38 +134,38 @@ def obtain_obs_latest(timeout=1) -> (Dict, Dict):
             return status, images
 
 
-def obtain_obs_after_time(timestamp_start) -> (Dict, Dict):
-    while not rospy.is_shutdown():
-        status = None
-        for k, cache in global_status_caches.items():
-            cache: message_filters.Cache
-            latest = cache.getLatestTime()
-            if latest is not None and timestamp_start < latest:
-                cached_messages = [cache.getElemAfterTime(timestamp_start)]
-                status = fetch_status_from_msgs(cached_messages)
-
-        with ThreadPoolExecutor(max_workers=8) as executor:
-            futures = {k: executor.submit(process_single_cache_after, cache, timestamp_start, k) for k, cache in
-                       global_image_caches.items()}
-            images = {k: future.result() for k, future in futures.items()}
-
-        if status is not None and all(v is not None for v in images.values()):
-            return status, images
-
-
-def obtain_obs_through_time(timestamp_start, timestamp) -> (Dict, Dict):
-    status = None
-    for k, cache in global_status_caches.items():
-        cache: message_filters.Cache
-        cached_messages = cache.getInterval(timestamp_start, timestamp)
-        status = fetch_status_from_msgs(cached_messages)
-
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        futures = {k: executor.submit(process_single_cache, cache, timestamp_start, timestamp, k) for k, cache in
-                   global_image_caches.items()}
-        images = {k: future.result() for k, future in futures.items()}
-
-    return status, images
+# def obtain_obs_after_time(timestamp_start) -> (Dict, Dict):
+#     while not rospy.is_shutdown():
+#         status = None
+#         for k, cache in global_status_caches.items():
+#             cache: message_filters.Cache
+#             latest = cache.getLatestTime()
+#             if latest is not None and timestamp_start < latest:
+#                 cached_messages = [cache.getElemAfterTime(timestamp_start)]
+#                 status = fetch_status_from_msgs(cached_messages)
+#
+#         with ThreadPoolExecutor(max_workers=8) as executor:
+#             futures = {k: executor.submit(process_single_cache_after, cache, timestamp_start, k) for k, cache in
+#                        global_image_caches.items()}
+#             images = {k: future.result() for k, future in futures.items()}
+#
+#         if status is not None and all(v is not None for v in images.values()):
+#             return status, images
+#
+#
+# def obtain_obs_through_time(timestamp_start, timestamp) -> (Dict, Dict):
+#     status = None
+#     for k, cache in global_status_caches.items():
+#         cache: message_filters.Cache
+#         cached_messages = cache.getInterval(timestamp_start, timestamp)
+#         status = fetch_status_from_msgs(cached_messages)
+#
+#     with ThreadPoolExecutor(max_workers=8) as executor:
+#         futures = {k: executor.submit(process_single_cache, cache, timestamp_start, timestamp, k) for k, cache in
+#                    global_image_caches.items()}
+#         images = {k: future.result() for k, future in futures.items()}
+#
+#     return status, images
 
 
 def fetch_img_from_msgs(cached_messages, name=None):
@@ -168,7 +176,7 @@ def fetch_img_from_msgs(cached_messages, name=None):
         #     rospy.logwarn(f"Img cached_messages is empty")
         return None
     img_msg = cached_messages[-1]
-    img = cv_bridge.imgmsg_to_cv2(img_msg, "bgr8")
+    img = bridge.imgmsg_to_cv2(img_msg, "bgr8")
     return img
 
 
@@ -184,12 +192,6 @@ def fetch_status_from_msgs(cached_messages):
         rospy.logwarn(f"Error json loads: {e}")
         return None
     return status
-
-
-def publish_action(action):
-    action_json = json.dumps(action)
-    action_publisher.publish(String(action_json))
-    rospy.logdebug(f"Published action: {action_json}")
 
 
 def execute_action(action, demo=False):

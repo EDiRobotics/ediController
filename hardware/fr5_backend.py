@@ -44,7 +44,7 @@ class HeartBeatThread(threading.Thread):
         self.heartbeat_publisher = publisher
 
     def run(self) -> None:
-        rospy.Duration(secs=1).sleep()
+        rospy.sleep(rospy.Duration(secs=1))
         if self.publish:
             self.heartbeat_publisher.publish("")
 
@@ -144,17 +144,24 @@ def handle_service(request: StringServiceRequest):
                      "obs_timestamp": obs_time.to_time(),
                      "mode": last_switch_state}
     publisher_action.publish(json.dumps(action_record))
-    err = robot_arm.act(action)
-    info["error"] = err
-    success = not bool(err)
-    obs_time = rospy.Time.now()
-    idx += 1
-    publisher_idx.publish(idx)
-    info_str = json.dumps(info)
-    return StringServiceResponse(
-        success=success,
-        message=info_str
-    )
+    try:
+        err = robot_arm.act(action)
+        info["error"] = err
+        success = not bool(err)
+        obs_time = rospy.Time.now()
+        idx += 1
+        publisher_idx.publish(idx)
+        info_str = json.dumps(info)
+        return StringServiceResponse(
+            success=success,
+            message=info_str
+        )
+    except:
+        traceback.print_exc()
+        return StringServiceResponse(
+            success=False,
+            message="unknown error"
+        )
 
 
 class Trajectory(abc.ABC):
@@ -310,7 +317,7 @@ class TrajectoryServer:
         action = self.optimized_trajectory.get_position(t)
         if action is not None:
             return action.tolist()
-        rospy.logwarn("self.optimized_trajectory.get_position failed, use last action. ")
+        # rospy.logwarn("self.optimized_trajectory.get_position failed, use last action.")
         if self.last_position is not None:
             return self.last_position.tolist()
         return None
@@ -350,19 +357,19 @@ class ArmControlThread(threading.Thread):
             next_control_time = self.control_time + rospy.Duration(nsecs=self.control_t_nsecs)
             action = self.traj_server.get_action(next_control_time)
             if action is None:
-                rospy.logerr("Get action is None!")
+                if call_count > 0:
+                    rospy.logerr("Get action is None!")
                 self.control_time = rospy.Time.now()
                 continue
             if rospy.Time.now() < next_control_time:
                 sleep_duration = next_control_time - rospy.Time.now()
                 rospy.sleep(sleep_duration)
-                self.control_time = next_control_time
+                # self.control_time = next_control_time
             else:
                 rospy.logwarn("Missing desired control frequency...")
-                self.control_time = rospy.Time.now()
+            self.control_time = rospy.Time.now()
             call_count += 1
-            self.robot.move_servo(action, self.control_t)
-            err = 0
+            err = self.robot.move(action, self.control_t)
             if err:
                 if self.heartbeat_thread is not None:
                     self.heartbeat_thread.stop_publishing()
@@ -373,16 +380,10 @@ class ArmControlThread(threading.Thread):
 
 
 class ActionLoopRobotArmBackend(RobotArmBackend):
-    control_freq = 100
+    control_freq = 50
 
-    def __init__(self, robot):
+    def __init__(self, robot, heartbeat_publisher):
         super().__init__()
-        try:
-            robot_controller = fr5()
-        except Exception as e:
-            rospy.logerr(f"Error occurs when launching Real Environment Backend: {e}")
-            exit(0)
-
         control_t = 1 / self.control_freq
         control_t_nsecs = int(control_t * 1000000000)
         self.control_t = control_t
@@ -400,10 +401,10 @@ class ActionLoopRobotArmBackend(RobotArmBackend):
         return err
 
     def reset(self):
-        pass
+        return 0
 
 
-robot_arm = ActionLoopRobotArmBackend(fr5())
+heartbeat_publisher = rospy.Publisher('/env/ctrl/backend_heartbeat', String, queue_size=10)
 
 idx = 0
 obs_time = rospy.Time.now()
@@ -414,7 +415,8 @@ publisher_action = rospy.Publisher(topic_name, String, queue_size=100)
 topic_name = "/env/step/info"
 publisher_info = rospy.Publisher(topic_name, String, queue_size=100)
 
-heartbeat_publisher = rospy.Publisher('/env/ctrl/backend_heartbeat', String, queue_size=10)
+robot_arm = ActionLoopRobotArmBackend(fr5(), heartbeat_publisher)
+
 last_switch_state = rospy.get_param("/env/ctrl/switch", "policy")
 rospy.set_param("/env/ctrl/switch", last_switch_state)
 rospy.set_param("/env/ctrl/policy", False)
