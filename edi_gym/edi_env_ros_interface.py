@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 import pdb
-
 import time
-
 import rospy
 from sensor_msgs.msg import Image
 import cv2

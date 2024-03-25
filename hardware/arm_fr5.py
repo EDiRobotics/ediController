@@ -221,7 +221,7 @@ class FR5:
         except:
             return -1
 
-    def _average_joint(self, joint, time_t, gamma=0.2, clip_vel=None, clip_acc=None, window_size=10):
+    def _average_joint(self, joint, time_t, gamma=0.2, clip_vel=None, clip_acc=None, window_size=15):
         current_vel = (np.array(joint) - self._last_pos[-1]) / time_t
         weights = np.ones(window_size)
         weights /= weights.sum()
