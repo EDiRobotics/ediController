@@ -33,7 +33,7 @@ class RetryingWrapper:
                 try:
                     method = getattr(self.robot, name)
                     return method(*args, **kwargs)
-                except ProtocolError as pe:
+                except Exception as pe:
                     retries += 1
                     if retries == self.max_retries:
                         raise pe
@@ -56,11 +56,11 @@ class FR5:
 
     x_min, x_max = 250, 800
     y_min, y_max = -300, 60
-    z_min, z_max = 130, 350
+    z_min, z_max = 130, 400
 
-    gamma = 0.1
-    clip_vel = np.array([15, 15, 30, 100, 50, 50])
-    clip_acc = np.array([200, 200, 200, 500, 300, 800])
+    gamma = 0.2
+    clip_vel = np.array([30, 30, 30, 100, 50, 50])
+    clip_acc = np.array([250, 250, 250, 400, 300, 800])
 
     safe_bound = 30
     x_min_soft, x_max_soft = x_min + safe_bound, x_max - safe_bound
@@ -130,16 +130,17 @@ class FR5:
                 joint = self.robot.GetInverseKin(0, [float(i) for i in desired_loc], -1)[1:]
                 out_of_workspace = True
             gamma = self.gamma if not out_of_workspace else 0.4
-            joint = self._ema_joint(joint, time_t, gamma, self.clip_vel, self.clip_acc)
-            current_vel = (np.array(joint) - self._last_pos[-1]) / time_t
-            current_acc = (current_vel - self._last_vel[-1]) / time_t
-
+            # start_time = time.time()
+            joint = self._average_joint(joint, time_t, gamma=gamma, clip_vel=self.clip_vel, clip_acc=self.clip_acc)
+            # print(f"{time.time() - start_time}")
+            # current_vel = (np.array(joint) - self._last_pos[-1]) / time_t
+            # current_acc = (current_vel - self._last_vel[-1]) / time_t
             # self._last_acc = np.roll(self._last_acc, -1, axis=0)
             # self._last_acc[-1] = current_acc
-            self._last_vel = np.roll(self._last_vel, -1, axis=0)
-            self._last_vel[-1] = current_vel
-            self._last_pos = np.roll(self._last_pos, -1, axis=0)
-            self._last_pos[-1] = joint
+            # self._last_vel = np.roll(self._last_vel, -1, axis=0)
+            # self._last_vel[-1] = current_vel
+            # self._last_pos = np.roll(self._last_pos, -1, axis=0)
+            # self._last_pos[-1] = joint
 
             loc = self.robot.GetForwardKin(joint)[1:]
             x, y, z = loc[0], loc[1], loc[2]
@@ -164,11 +165,7 @@ class FR5:
                 self.initialize()
                 return 0
             ret = self.robot.ServoJ(joint, 0.0, 0.0, time_t, 0.0, 0.0)
-
             return ret
-        except ProtocolError as pe:
-            # return -3
-            return 0
         except Exception as e:
             print("_last_pos", self._last_pos)
             print("_last_vel", self._last_vel)
@@ -224,10 +221,12 @@ class FR5:
         except:
             return -1
 
-    def _ema_joint(self, joint, time_t, gamma=0.2, clip_vel=None, clip_acc=None):
-
+    def _average_joint(self, joint, time_t, gamma=0.2, clip_vel=None, clip_acc=None, window_size=10):
         current_vel = (np.array(joint) - self._last_pos[-1]) / time_t
-        current_vel = gamma * current_vel + (1 - gamma) * self._last_vel[-1]
+        weights = np.ones(window_size)
+        weights /= weights.sum()
+        # current_vel = gamma * current_vel + (1 - gamma) * self._last_vel[-1]
+        current_vel = (1 - gamma) * np.dot(weights, self._last_vel[-1:-1 - window_size:-1]) + gamma * current_vel
 
         current_acc = (current_vel - self._last_vel[-1]) / time_t
         if clip_acc is not None:
@@ -238,6 +237,37 @@ class FR5:
             current_vel = np.clip(current_vel, -clip_vel, clip_vel)
 
         updated_joint = self._last_pos[-1] + current_vel * time_t
+        self._last_vel = np.roll(self._last_vel, -1, axis=0)
+        self._last_vel[-1] = current_vel
+        self._last_pos = np.roll(self._last_pos, -1, axis=0)
+        self._last_pos[-1] = updated_joint
+        return updated_joint.tolist()
+
+    def _ema_joint(self, joint, time_t, gamma=1.0, clip_vel=None, clip_acc=None, window_size=10):
+        weights = np.exp(-gamma * np.arange(window_size))
+        weights /= weights.sum()
+
+        # Calculate the current velocity using finite difference
+        current_vel = (np.array(joint) - self._last_pos[-1]) / time_t
+
+        # Update the EMA for velocity
+        self._last_vel = np.roll(self._last_vel, -1, axis=0)
+        self._last_vel[-1] = np.dot(weights, self._last_vel[-1:-1 - window_size:-1]) + (1 - gamma) * current_vel
+
+        # Calculate the current acceleration using finite difference
+        current_acc = (self._last_vel[-1] - self._last_vel[-2]) / time_t
+        if clip_acc is not None:
+            current_acc = np.clip(current_acc, -clip_acc, clip_acc)
+
+        # Update the EMA for position
+        self._last_pos = np.roll(self._last_pos, -1, axis=0)
+        self._last_pos[-1] = self._last_pos[-2] + self._last_vel[-2] * time_t + 0.5 * current_acc * time_t ** 2
+
+        if clip_vel is not None:
+            # Clip the resulting velocity
+            self._last_vel[-1] = np.clip(self._last_vel[-1], -clip_vel, clip_vel)
+
+        updated_joint = self._last_pos[-1]
         return updated_joint.tolist()
 
 

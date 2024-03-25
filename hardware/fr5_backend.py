@@ -380,7 +380,7 @@ class ArmControlThread(threading.Thread):
 
 
 class ActionLoopRobotArmBackend(RobotArmBackend):
-    control_freq = 50
+    control_freq = 100
 
     def __init__(self, robot, heartbeat_publisher):
         super().__init__()
@@ -398,6 +398,7 @@ class ActionLoopRobotArmBackend(RobotArmBackend):
     def act(self, action):
         self.traj_server.add_action(action)
         err = self.control_thread.get_error()
+        time.sleep(self.control_t)
         return err
 
     def reset(self):
