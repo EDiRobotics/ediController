@@ -1,6 +1,7 @@
 import argparse
 import datetime
 import json
+import pdb
 import sys
 import os
 import time
@@ -70,40 +71,66 @@ def load_from_bag(file_name, config=None):
 
     # Process and pair actions with observations
     results = []
-    for action_data, action_time in topics[action_topic]:
+    env_topics = sensor_topics + [status_topic]
+    topics_iterators = {k: [iter(topics[k]), False] for k in env_topics}
+
+    for i, (action_data, action_time) in enumerate(topics[action_topic]):
         idx = action_data["idx"]
-        start_time = idx_times.get(idx - 1, None)
-        end_time = action_time
+        # start_time = idx_times.get(idx - 1, None)
+        start_time = rospy.Time(action_data["obs_timestamp"])
 
         observations = {
             "status": [],
             "sensors": {sensor_topic: [] for sensor_topic in sensor_topics}
         }
-
-        # Collect status and sensor data between idx timestamps
-        for topic, messages in topics.items():
-            if topic == status_topic or topic in sensor_topics:
-                for msg, msg_time in messages:
-                    if start_time is not None and msg_time > start_time:
-                        # if start_time is not None and msg_time > start_time and msg_time <= end_time:
+        obs = {
+            "status": None,
+            "sensors": {}
+        }
+        latest_timestamp = None
+        while not rospy.is_shutdown():
+            for topic, (iterator, b) in topics_iterators.items():
+                try:
+                    msg, msg_time = next(iterator)
+                    if msg_time > start_time:
                         if topic == status_topic:
                             status = json.loads(msg.data)
-                            observations["status"].append(status)
+                            observations["status"].append((status, msg_time))
                         else:
                             msg: Image
                             img = bridge.imgmsg_to_cv2(msg, "bgr8")
-                            observations["sensors"][topic].append(img)
+                            observations["sensors"][topic].append((img, msg_time))
+                    if all(len(observations["status"]) > 0 and len(observations["sensors"][tp]) > 0 for tp in
+                           observations["sensors"]) and len(observations["sensors"]) > 0:
+                        latest_timestamp = msg_time
                         break
+                except StopIteration:
+                    topics_iterators[topic][1] = True
+                except:
+                    traceback.print_exc()
+            if all(len(observations["status"]) > 0 and len(observations["sensors"][tp]) > 0 for tp in
+                   observations["sensors"]) and len(observations["sensors"]) > 0:
+                messages = observations["status"]
+                messages = [(m, timestamp) for m, timestamp in messages if timestamp <= latest_timestamp]
+                m, timestamp = messages[-1]
+                obs["status"] = m
+                for k, messages in observations["sensors"].items():
+                    messages = [(m, timestamp) for m, timestamp in messages if timestamp <= latest_timestamp]
+                    m, timestamp = messages[-1]
+                    obs["sensors"][k] = m
+                break
+
+            if all(b for _, b in topics_iterators.values()):
+                break
 
         results.append({
             "idx": idx,
             "action": action_data["action"],
-            "obs": observations,
+            "obs": obs,
             "obs_timestamp": action_data["obs_timestamp"],
             "action_timestamp": action_data["timestamp"],
             "action_mode": action_data["mode"],
         })
-
     if len(results) <= 2:
         rospy.logerr(f"[loader] Failed to process {params_file_name}, len is {len(results)}...")
         return None
@@ -114,20 +141,8 @@ def load_from_bag(file_name, config=None):
     for step, item in enumerate(results):
         idx = item["idx"]
         item["step"] = step
-        observations = item["obs"]
-        messages = observations["status"]
-        if len(messages) == 0:
-            rospy.logwarn(f"idx {idx} status is empty")
-            observations["status"] = None
-        else:
-            observations["status"] = messages[0]
-        for k, messages in observations["sensors"].items():
-            if len(messages) == 0:
-                rospy.logwarn(f"idx {idx} {k} is empty")
-                observations["sensors"][k] = None
-            else:
-                observations["sensors"][k] = messages[0]
         del item["idx"]
+
     instruct = ""
     instruct_param = "/env/info/instruct"
     if instruct_param in params:
@@ -149,7 +164,7 @@ def find_files_with_extension(directory, extension):
     return file_list
 
 
-def record(input_path, lmdb_save_path=None, delete_bag=False, cover_exist=False, gif=True):
+def record(input_path, lmdb_save_path=None, cover_exist=False, gif=True):
     if not os.path.exists(input_path):
         rospy.loginfo(f"Input path {input_path} doesn't exist, exiting...")
         exit(1)
@@ -196,13 +211,6 @@ def record(input_path, lmdb_save_path=None, delete_bag=False, cover_exist=False,
                 with open(json_full_name, 'w') as file:
                     json.dump(meta_data, file, indent=4)
 
-                if delete_bag:
-                    try:
-                        os.remove(full_file_name)
-                        rospy.loginfo(f"[loader] <{i}/{len(file_list)}> Deleted {full_file_name}")
-                    except OSError as e:
-                        rospy.logerr(f"[loader] <{i}/{len(file_list)}> Error deleting {full_file_name}: {e.strerror}")
-
             all_results.append((full_file_name, results))
         else:
             rospy.logwarn(f"[loader] <{i}/{len(file_list)}> Pass {full_file_name} because save_path exists...")
@@ -245,7 +253,7 @@ if __name__ == "__main__":
             episode = d["episode"]
         lmdb_save_path = f"dataset/train_{episode}_lmdb"
         # lmdb_save_path = f"dataset/train_nav_lmdb"
-        all_results += record(file_path, lmdb_save_path=lmdb_save_path, delete_bag=delete_bag, cover_exist=True)
+        all_results += record(file_path, lmdb_save_path=lmdb_save_path, cover_exist=True)
 
     rospy.loginfo(f"----- Starting to replay -----")
     from data_collection.replay import display_sensor_data
@@ -254,4 +262,4 @@ if __name__ == "__main__":
         rospy.loginfo(f"Start to replay {full_file_name}...")
         display_sensor_data(results, display_image=display_image, display_action=display_action)
 
-    rospy.loginfo(f"Finish all replay tasks...")
+    # rospy.loginfo(f"Finish all replay tasks...")
