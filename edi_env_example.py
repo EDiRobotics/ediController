@@ -12,13 +12,20 @@ action = joint + [angle]
 # """
 # Only available when rospy is found.
 # """
+
 env = EdiEnv()
-print(env.reset())
-while True:
-    obs, _, _, info = env.step(action)
-    for camera_name, image in obs["images"].items():
-        cv2.imshow(camera_name, image)
-    cv2.waitKey(1)  # Display the window until a key is pressed
+max_step = 200
+
+
+def eval(model, env):
+    model.eval()
+    obs = env.reset()
+    for step in range(max_step):
+        action = model(obs)
+        obs, _, _, info = env.step(action)
+        for camera_name, image in obs["sensors"].items():
+            cv2.imshow(camera_name, image)
+        cv2.waitKey(1)
 
 # ---- Test env.step_with_action only ----
 # while True:

@@ -80,19 +80,27 @@ class StepLMDBDatasetV2(Dataset):
         lmdb_dir = self.episode_to_lmdb[episode_key]
         lmdb_dir = os.path.join(self.root_dir, lmdb_dir)
         episode_data = load_step_from_lmdb(lmdb_dir, episode_key, step)
-        if episode_data:
-            obs = episode_data["records"]["obs"]
-            action = episode_data["records"]["action"]
-            inst = episode_data["instruct"]
-            return obs, action, inst
-        else:
+        if not episode_data:
             if not os.path.exists(lmdb_dir):
                 raise Exception(f"Cannot load episode {episode_key}: path {lmdb_dir} not exist!")
             raise Exception(f"Cannot load step {step} from {episode_key} in {lmdb_dir}!")
 
+        obs = episode_data["records"]["obs"]
+        action = episode_data["records"]["action"]
+        instruct = episode_data["instruct"]
+        action = np.array(action)
+        return obs, action, instruct
+
     @property
     def episode_num(self):
         return len(self.episode_to_lmdb)
+
+
+class SuitableStepLMDBDatasetV2(StepLMDBDatasetV2):
+    def __getitem__(self, index):
+        obs, action, instruct = super().__getitem__(index)
+        obs["status"] = np.array(obs["status"]["jt_cur_pos"][0])
+        return obs, action, instruct
 
 
 if __name__ == "__main__":

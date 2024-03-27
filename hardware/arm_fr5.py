@@ -152,7 +152,8 @@ class FR5:
             # self._last_cart_acc_d = np.roll(self._last_cart_acc_d, -1, axis=0)
             # self._last_cart_acc_d[-1] = (self._last_cart_vel_d[-1] - self._last_cart_vel[-2]) / time_t
 
-            if not (self.x_min <= x <= self.x_max and self.y_min <= y <= self.y_max and self.z_min <= z <= self.z_max):
+            if joint[0] > 90 or (not
+            (self.x_min <= x <= self.x_max and self.y_min <= y <= self.y_max and self.z_min <= z <= self.z_max)):
                 print(f"[move_joint_servo] Out of workspace! joint \n{joint}, loc \n{loc}.")
                 # pdb.set_trace()
                 self.initialize()
@@ -205,7 +206,8 @@ class FR5:
             # self._last_cart_acc_d = np.roll(self._last_cart_acc_d, -1, axis=0)
             # self._last_cart_acc_d[-1] = (self._last_cart_vel_d[-1] - self._last_cart_vel[-2]) / time_t
 
-            if not (self.x_min <= x <= self.x_max and self.y_min <= y <= self.y_max and self.z_min <= z <= self.z_max):
+            if joint[0] > 90 or (not
+            (self.x_min <= x <= self.x_max and self.y_min <= y <= self.y_max and self.z_min <= z <= self.z_max)):
                 print(f"[move_joint_servo] Out of workspace! joint \n{joint}, loc \n{loc}.")
                 # pdb.set_trace()
                 self.initialize()

@@ -71,7 +71,7 @@ class EdiEnv:
           obs (dict): The initial observation after reset.
             - obs["status"] (dict): The initial status data.
               Contains sensor readings, system state, etc.
-            - obs["images"] (dict): The initial image data.
+            - obs["sensors"] (dict): The initial image data.
               The keys are camera names (str).
               The values are OpenCV images (np.ndarray) from each camera.
         """
@@ -92,7 +92,7 @@ class EdiEnv:
           obs (dict): The observation after taking the action.
             - obs["status"] (dict): The status data after the step.
               Contains sensor readings, system state, etc.
-            - obs["images"] (dict): The image data after the step.
+            - obs["sensors"] (dict): The image data after the step.
               The keys are camera names (str).
               The values are OpenCV images (np.ndarray) from each camera.
           reward (float): The reward from taking the action.
@@ -135,7 +135,7 @@ class EdiEnv:
             self.last_images[k] = img
         obs = dict()
         obs["status"] = status
-        obs["images"] = images
+        obs["sensors"] = images
         return obs, rospy.Time.now()
 
     def _wait_until_ready(self):
@@ -143,7 +143,7 @@ class EdiEnv:
             rospy.loginfo('Checking Availability.')
             obs, _ = self._obtain_obs_latest()
             status = obs["status"]
-            images = obs["images"]
+            images = obs["sensors"]
             if status is not None and all(v is not None for v in images.values()):
                 break
             rospy.loginfo('Something not available, Retrying...')

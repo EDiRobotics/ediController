@@ -99,9 +99,9 @@ def get_from_title(field_name, a_data):
             res = a.tolist()
         else:
             res = a.item()
+        return res
     except:
-        return None
-    return res
+        raise Exception(f"{field_name} is None")
 
 
 gripper_pos = 0
@@ -162,8 +162,13 @@ def getStatus():
         except:
             continue
         d = {}
-        for field_name in FeedBackType_2k1.names:
-            d[field_name] = get_from_title(field_name, a)
+        try:
+            for field_name in FeedBackType_2k1.names:
+                res = get_from_title(field_name, a)
+                d[field_name] = res
+        except Exception as e:
+            rospy.logwarn(str(e))
+            continue
         d["gripper_pos"] = gripper_pos
         json_data = json.dumps(d)
         publisher.publish(json_data)
