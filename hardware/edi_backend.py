@@ -17,7 +17,6 @@ from std_msgs.msg import String, Int32, Float32
 from std_srvs.srv import Trigger, TriggerResponse
 from backend.srv import StringService, StringServiceRequest, StringServiceResponse
 from hardware.arm_fr5 import fr5
-from xmlrpc.client import ProtocolError
 
 rospy.init_node('backend', anonymous=True)
 rospy.loginfo(f"Launching Real Environment Backend...")
@@ -398,6 +397,7 @@ class ActionLoopRobotArmBackend(RobotArmBackend):
     def act(self, action):
         self.traj_server.add_action(action)
         err = self.control_thread.get_error()
+        # TODO
         time.sleep(self.control_t)
         return err
 

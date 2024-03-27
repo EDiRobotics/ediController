@@ -3,17 +3,15 @@ import pdb
 import sys
 import json
 import numpy as np
+from socket import socket, AF_INET, SOCK_DGRAM
+import codecs
+from pymodbus.utilities import computeCRC
+import time
+import codecs
+import rospy
 
 sys.path.append(r'.')
 
-import rospy
-
-rospy.init_node('arm_demo', anonymous=True)
-
-from pymodbus.utilities import computeCRC
-from modules.udp import UDP
-import time
-import codecs
 from edi_gym.edi_env import EdiEnv
 
 J5_min = 100.0
@@ -66,6 +64,32 @@ def clamp_map(value, f_min, f_max, t_min, t_max):  # , bias = 0):
     #     value = t_min
 
     return value
+
+
+class UDP(object):
+
+    def __init__(self, ipAddress, port):
+        self.UDP_CLIENT_SOCKET = socket(AF_INET, SOCK_DGRAM)
+        self.IP_ADDR = ipAddress  # Arm IP
+        self.PORT = port
+        self.Address = (ipAddress, port)
+
+        self.LocalAddress = ("", 2001)
+        self.UDP_CLIENT_SOCKET.bind(self.LocalAddress)
+        print("UDP server " + ipAddress + ":" + str(port) + " connected")
+
+    def Send(self, stream):
+        self.UDP_CLIENT_SOCKET.sendto(stream, self.Address)
+        # print("SEND DATA:" + str(codecs.encode(stream, 'hex')))
+
+    def Request(self, stream):
+        self.UDP_CLIENT_SOCKET.sendto(stream, self.Address)
+        receive, client = self.UDP_CLIENT_SOCKET.recvfrom(48)
+        # print("SEND DATA:" + str(codecs.encode(receive, 'hex')))
+        return codecs.encode(receive, 'hex')
+
+    def Close(self):
+        self.UDP_CLIENT_SOCKET.close()
 
 
 class ArmINNFO(object):

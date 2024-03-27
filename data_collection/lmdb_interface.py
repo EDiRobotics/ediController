@@ -7,6 +7,7 @@ import numpy as np
 import torch
 from torchvision.io import encode_jpeg, decode_jpeg, encode_png, decode_png
 from PIL import Image
+import rospy
 
 
 def save_to_lmdb(results, lmdb_directory, gif=True):
@@ -102,8 +103,7 @@ def save_to_lmdb(results, lmdb_directory, gif=True):
     if gif:
         success = generate_gif(results, lmdb_directory)
         if not success:
-            rospy.logerr(f"Error occurs when generating gif for {full_file_name}!")
-            return False
+            rospy.logwarn(f"Error occurs when generating gif for {episode_key}!")
     return True
 
 
@@ -251,8 +251,11 @@ def generate_gif(results, save_path, resize_dim=(80, 60)):
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
-    if not results['records'] or not results['records'][0]['obs']['sensors']:
-        rospy.logwarn("No records or sensors found in results.")
+    if not results['records']:
+        rospy.logwarn("[gif] No records.")
+        return False
+    if not results['records'][0]['obs']['sensors']:
+        rospy.logwarn("[gif] No sensor data found in results.")
         return False
 
     episode = results['episode']
@@ -310,7 +313,7 @@ def merge_fragments(root_dir, lmdb_save_path, gif=True):
         results = load_episode_from_lmdb(lmdb_dir, episode_key)
         success = save_to_lmdb(results, lmdb_save_path, gif=gif)
         if not success:
-            rospy.logerr(f"Error occurs when dumping {full_file_name}!")
+            rospy.logerr(f"Error occurs when dumping {episode_key}!")
             continue
 
 
@@ -352,13 +355,13 @@ if __name__ == "__main__":
             if not generate_gif(results, lmdb_directory):
                 print(f"Error generating gif for {episode}")
         print(all_results)
-        import rospy
-
-        rospy.init_node('lmdb_loader')
-        rospy.loginfo(f"----- Starting to replay -----")
-        from data_collection.replay import display_sensor_data
-
-        for i, (full_file_name, results) in enumerate(all_results):
-            rospy.loginfo(f"Start to replay {full_file_name}...")
-            display_sensor_data(results, display_image=display_image, display_action=display_action)
-        rospy.loginfo(f"Finish all replay tasks...")
+        # import rospy
+        #
+        # rospy.init_node('lmdb_loader')
+        # rospy.loginfo(f"----- Starting to replay -----")
+        # from data_collection.replay import display_sensor_data
+        #
+        # for i, (full_file_name, results) in enumerate(all_results):
+        #     rospy.loginfo(f"Start to replay {full_file_name}...")
+        #     display_sensor_data(results, display_image=display_image, display_action=display_action)
+        # rospy.loginfo(f"Finish all replay tasks...")

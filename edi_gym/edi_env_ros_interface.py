@@ -16,11 +16,6 @@ from rospy import Duration
 from std_srvs.srv import Trigger, TriggerRequest, TriggerResponse
 from backend.srv import StringService, StringServiceRequest, StringServiceResponse
 
-try:
-    rospy.init_node('ros_interface', anonymous=True)
-except:
-    pass
-
 global_image_caches = {}
 global_status_caches = {}
 bridge = CvBridge()

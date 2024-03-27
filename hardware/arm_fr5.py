@@ -86,7 +86,6 @@ class FR5:
         print(f'\033[37m[__init__]: Robot initializing.. \033[0m')
         # gripper 14 cm
         gripper_length = 13.0
-        # TODO: default_pose not as expected
         default_pose = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         gripper_pose = [0.0, 0.0, float(gripper_length), 0.0, 0.0, 0.0]
         self.robot.ResetAllError()
@@ -113,10 +112,10 @@ class FR5:
 
     def move_servo(self, joint, time_t):
         try:
-            # if self.robot.ResetAllError() != 0:
-            #     pdb.set_trace()
-            #     print(f"[move_joint._servo] Cannot clear errors, need to restart")
-            #     return -1
+            if self.robot.ResetAllError() != 0:
+                pdb.set_trace()
+                print(f"[move_joint._servo] Cannot clear errors, need to restart")
+                return -1
 
             loc = self.robot.GetForwardKin(joint)[1:]
             desired_loc = [item for item in loc]
@@ -133,15 +132,6 @@ class FR5:
             # start_time = time.time()
             joint = self._average_joint(joint, time_t, gamma=gamma, clip_vel=self.clip_vel, clip_acc=self.clip_acc)
             # print(f"{time.time() - start_time}")
-            # current_vel = (np.array(joint) - self._last_pos[-1]) / time_t
-            # current_acc = (current_vel - self._last_vel[-1]) / time_t
-            # self._last_acc = np.roll(self._last_acc, -1, axis=0)
-            # self._last_acc[-1] = current_acc
-            # self._last_vel = np.roll(self._last_vel, -1, axis=0)
-            # self._last_vel[-1] = current_vel
-            # self._last_pos = np.roll(self._last_pos, -1, axis=0)
-            # self._last_pos[-1] = joint
-
             loc = self.robot.GetForwardKin(joint)[1:]
             x, y, z = loc[0], loc[1], loc[2]
 

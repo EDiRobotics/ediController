@@ -31,9 +31,14 @@ class EdiEnv:
     demo = False
     _use_action_chunk = False
 
-    def __init__(self, demo=False) -> None:
+    def __init__(self, node_name="ros_interface", demo=False) -> None:
         super(EdiEnv, self).__init__()
         EdiEnv.demo = demo
+        try:
+            rospy.init_node(node_name, anonymous=True)
+        except:
+            pass
+
         self.heartbeat_client = HeartbeatClient()
 
         self.last_status = None
@@ -58,14 +63,10 @@ class EdiEnv:
               The keys are camera names (str).
               The values are OpenCV images (np.ndarray) from each camera.
         """
-        obs = dict()
         execute_reset()
         if not self.demo:
             rospy.set_param("/env/ctrl/switch", "policy")
-        time_now = rospy.Time.now()
-        s, images = self._obtain_obs_latest()
-        obs["status"] = s
-        obs["images"] = images
+        obs, _ = self._obtain_obs_latest()
         return obs
 
     def step(self, action):
@@ -93,21 +94,14 @@ class EdiEnv:
             action = action.tolist()
         step_start = rospy.Time.now()
         step_action_info = self.step_with_action(action)
-        obs = dict()
         obtain_start = rospy.Time.now()
-        s, images = self._obtain_obs_latest()
-        obtain_end = rospy.Time.now()
-        obs["status"] = s
-        obs["images"] = images
+        obs, timestamp = self._obtain_obs_latest()
         reward = 0.0
         done = False
-        info = {"timestamp_before_action": step_start.to_time(),
-                "timestamp_after_action": obtain_start.to_time()}
+        info = {"obs_timestamp": timestamp.to_time()}
         info.update(step_action_info)
         rospy.logdebug(f"[Gym: step] Step_start {step_start}, Obtain_start {obtain_start}, ")
         rospy.logdebug(f"[Gym: step] Action time {(obtain_start - step_start).to_sec()}")
-        rospy.logdebug(f"[Gym: step] Obtain time {(obtain_end - obtain_start).to_sec()}")
-        rospy.logdebug(f"[Gym: step] Package time {(rospy.Time.now() - obtain_end).to_sec()}")
         return obs, reward, done, info
 
     def close(self):
@@ -127,12 +121,17 @@ class EdiEnv:
                 img = self.last_images[k]
             images[k] = img
             self.last_images[k] = img
-        return status, images
+        obs = dict()
+        obs["status"] = status
+        obs["images"] = images
+        return obs, rospy.Time.now()
 
     def _wait_until_ready(self):
         while not rospy.is_shutdown():
             rospy.loginfo('Checking Availability.')
-            status, images = self._obtain_obs_latest()
+            obs, _ = self._obtain_obs_latest()
+            status = obs["status"]
+            images = obs["images"]
             if status is not None and all(v is not None for v in images.values()):
                 break
             rospy.loginfo('Something not available, Retrying...')

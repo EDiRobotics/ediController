@@ -14,13 +14,16 @@ import rospy
 import psutil
 from std_msgs.msg import Int8, String
 from std_srvs.srv import Trigger, TriggerResponse, TriggerRequest
+from data_collection.bag_loader import record
 
 sys.path.append(".")
-from data_collection.bag_loader import record
 
 rospy.init_node('record_bags')
 rospy.loginfo(f"[record] Initialize records node.")
+
 bag_save_base = f"dataset/bag"
+lmdb_save_base = f"dataset/train_lmdb"
+lmdb_save_path_is_fixed = True
 
 
 def terminate_process_and_children(p):
@@ -172,9 +175,11 @@ class rosbagRecorder:
             self.record.end()
             rospy.loginfo(f"\n--- End record {self.record.bag_path} ---")
             rospy.set_param('/record/ctrl/recording', False)
-            response = TriggerResponse(success=True, message=self.record.full_path)
+            save_path = self.record.full_path
+            response = TriggerResponse(success=True, message=save_path)
             self.record = None
             self.mutex.release()
+            convertor.add(save_path)
             return response
         else:
             self.mutex.release()
@@ -190,45 +195,60 @@ class rosbagRecorder:
         self.env_timestamps = rospy.get_time()
 
 
-# def convert():
-#     while not rospy.is_shutdown():
-#         global save_queue, lmdb_save_path
-#         if save_queue.empty():
-#             time.sleep(.1)
-#             # rospy.loginfo(f"[record] Queue is empty, waiting for rosbag.")
-#             continue
-#         bag_full_path = save_queue.get()
-#         dir_name, _ = os.path.split(bag_full_path)
-#
-#         datetime_now = datetime.datetime.now()
-#         datetime_now = datetime_now.strftime("%Y%m%d%H%M%S")
-#         if not lmdb_save_path_is_fixed:
-#             lmdb_save_path = f"dataset/train_{datetime_now}_lmdb"
-#         rospy.loginfo(f"[record] Get {bag_full_path}, start saving to {lmdb_save_path}...")
-#         try:
-#             time.sleep(1)
-#             record(bag_full_path, lmdb_save_path=lmdb_save_path, delete_bag=delete_bag)
-#         except Exception as e:
-#             traceback.print_exc()
-#             rospy.logerr(f"[record] Saving {bag_full_path} error: {e}...")
-#
-#
-# convert_thread = threading.Thread(target=convert)
-# convert_thread.start()
-#
-# lmdb_save_path_is_fixed = True
-# self.lmdb_save_path = f"dataset/train_{datetime_start}_lmdb"
-# if lmdb_save_path_is_fixed:
-#     rospy.set_param('/record/ctrl/fixed_lmdb', True)
-#     rospy.loginfo(f"[record] LMDB save path is fixed, set to {lmdb_save_path}.")
-# else:
-#     rospy.set_param('/record/ctrl/fixed_lmdb', False)
-#     rospy.loginfo(f"[record] LMDB save path is not fixed.")
+class Convertor:
+    def __init__(self, base, fix_save_path=True, delete_bag=True):
+        self.save_queue = queue.Queue()
+        self.base = base
+        if not os.path.exists(self.base):
+            os.makedirs(self.base)
+        self.path = None
+        self.fix_save_path = fix_save_path
+        self.delete_bag = delete_bag
+        if fix_save_path:
+            rospy.set_param('/record/ctrl/fixed_lmdb', True)
+            self.path = self._get_path(name=None)
+            rospy.loginfo(f"[record] LMDB save path is fixed, set to {self.path}.")
+        else:
+            rospy.set_param('/record/ctrl/fixed_lmdb', False)
+            rospy.loginfo(f"[record] LMDB save path is not fixed.")
 
+        convert_thread = threading.Thread(target=self._convert)
+        convert_thread.start()
+
+    def add(self, bag_name):
+        self.save_queue.put(bag_name)
+
+    def _get_path(self, name=None):
+        datetime_start = datetime.datetime.now()
+        if name is None:
+            name = datetime_start.strftime("%Y%m%d_%H%M%S")
+        return os.path.join(self.base, name)
+
+    def _convert(self):
+        while not rospy.is_shutdown():
+            if self.save_queue.empty():
+                rospy.sleep(1)
+                continue
+            bag_full_path = self.save_queue.get()
+            path = self.path if self.path is not None else self._get_path()
+            rospy.loginfo(f"[record] get {bag_full_path}, start saving to {path}...")
+            try:
+                rospy.sleep(1)
+                record(bag_full_path, lmdb_save_path=path)
+                if self.delete_bag:
+                    try:
+                        os.remove(bag_full_path)
+                    except OSError as e:
+                        rospy.logerr(f"Converting Success, but can not delete the original rosbag file.")
+            except Exception as e:
+                traceback.print_exc()
+                rospy.logerr(f"[record] Saving {bag_full_path} error: {e}...")
+
+
+convertor = Convertor(lmdb_save_base, fix_save_path=lmdb_save_path_is_fixed)
 recorder = rosbagRecorder(bag_save_base)
 client_heartbeat_subscriber = rospy.Subscriber("/record/ctrl/client", String, recorder.client_heartbeat_callback)
 env_heartbeat_subscriber = rospy.Subscriber("/record/ctrl/env", String, recorder.env_callback)
 start_service = rospy.Service('/record/ctrl/start_record_srv', Trigger, recorder.start_record_service)
 end_service = rospy.Service('/record/ctrl/end_record_srv', Trigger, recorder.end_record_service)
 rospy.spin()
-# convert_thread.join()

@@ -126,7 +126,7 @@ def getStatus():
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(5)  # Initial connection timeout
         retries = 0
-        while retries < MAX_RETRIES:
+        while retries < MAX_RETRIES and not rospy.is_shutdown():
             try:
                 s.connect((FR_HOST, STATUS_PORT))
                 s.settimeout(1)  # Timeout for recv
