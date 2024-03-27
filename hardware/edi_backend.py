@@ -52,7 +52,8 @@ class HeartBeatThread(threading.Thread):
 
 
 def rst_service(request):
-    if robot_arm.reset() == 0:
+    err = robot_arm.reset()
+    if err == 0:
         return TriggerResponse(
             success=True,
             message=""
@@ -368,7 +369,7 @@ class ArmControlThread(threading.Thread):
                 rospy.logwarn("Missing desired control frequency...")
             self.control_time = rospy.Time.now()
             call_count += 1
-            err = self.robot.move(action, self.control_t)
+            err = self.robot.move_servo(action, self.control_t)
             if err:
                 if self.heartbeat_thread is not None:
                     self.heartbeat_thread.stop_publishing()
@@ -381,7 +382,7 @@ class ArmControlThread(threading.Thread):
 class ActionLoopRobotArmBackend(RobotArmBackend):
     control_freq = 100
 
-    def __init__(self, robot, heartbeat_publisher):
+    def __init__(self, robot, heartbeat_publisher=None):
         super().__init__()
         control_t = 1 / self.control_freq
         control_t_nsecs = int(control_t * 1000000000)
@@ -389,8 +390,9 @@ class ActionLoopRobotArmBackend(RobotArmBackend):
         self.control_t_nsecs = control_t_nsecs
         self.robot = robot
         self.traj_server = TrajectoryServer(self.control_freq)
-        self.heartbeat_thread = HeartBeatThread(heartbeat_publisher)
-        self.heartbeat_thread.start()
+        if heartbeat_publisher is not None:
+            self.heartbeat_thread = HeartBeatThread(heartbeat_publisher)
+            self.heartbeat_thread.start()
         self.control_thread = ArmControlThread(self.robot, self.traj_server, self.control_freq, self.heartbeat_thread)
         self.control_thread.start()
 
@@ -405,7 +407,6 @@ class ActionLoopRobotArmBackend(RobotArmBackend):
         return 0
 
 
-heartbeat_publisher = rospy.Publisher('/env/ctrl/backend_heartbeat', String, queue_size=10)
 
 idx = 0
 obs_time = rospy.Time.now()
@@ -416,6 +417,7 @@ publisher_action = rospy.Publisher(topic_name, String, queue_size=100)
 topic_name = "/env/step/info"
 publisher_info = rospy.Publisher(topic_name, String, queue_size=100)
 
+heartbeat_publisher = rospy.Publisher('/env/ctrl/backend_heartbeat', String, queue_size=10)
 robot_arm = ActionLoopRobotArmBackend(fr5(), heartbeat_publisher)
 
 last_switch_state = rospy.get_param("/env/ctrl/switch", "policy")

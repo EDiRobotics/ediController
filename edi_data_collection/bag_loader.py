@@ -18,7 +18,7 @@ from sensor_msgs.msg import Image
 import rospy
 
 sys.path.append(".")
-from data_collection.lmdb_interface import save_to_lmdb, generate_gif
+from edi_data_collection.lmdb_interface import save_to_lmdb, generate_gif
 
 bridge = CvBridge()
 
@@ -256,7 +256,7 @@ if __name__ == "__main__":
         all_results += record(file_path, lmdb_save_path=lmdb_save_path, cover_exist=True)
 
     rospy.loginfo(f"----- Starting to replay -----")
-    from data_collection.replay import display_sensor_data
+    from edi_data_collection.replay import display_sensor_data
 
     for i, (full_file_name, results) in enumerate(all_results):
         rospy.loginfo(f"Start to replay {full_file_name}...")

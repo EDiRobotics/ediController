@@ -14,7 +14,7 @@ import rospy
 import psutil
 from std_msgs.msg import Int8, String
 from std_srvs.srv import Trigger, TriggerResponse, TriggerRequest
-from data_collection.bag_loader import record
+from edi_data_collection.bag_loader import record
 
 sys.path.append(".")
 

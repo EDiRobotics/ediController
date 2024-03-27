@@ -10,7 +10,7 @@ import sys
 import pdb
 
 sys.path.append(".")
-from data_collection.lmdb_interface import load_keys_from_lmdb, load_episode_from_lmdb, load_step_from_lmdb
+from edi_data_collection.lmdb_interface import load_keys_from_lmdb, load_episode_from_lmdb, load_step_from_lmdb
 
 
 def generate_dataset_config(root_dir, csv_file_name):
@@ -106,10 +106,6 @@ if __name__ == "__main__":
                         help='Path can be a rosbag file or a directory (recursively search).')
     parser.add_argument('--csv_name', type=str, default="test.csv",
                         help='Path can be a rosbag file or a directory (recursively search).')
-    parser.add_argument('--display_image', '-i', action='store_true',
-                        help='Replay image with cv2')
-    parser.add_argument('--display_action', '-a', action='store_true',
-                        help='Replay action')
     parser.add_argument('--generate_config', '-g', action='store_true',
                         help='Replay action')
     args = parser.parse_args()
@@ -117,8 +113,6 @@ if __name__ == "__main__":
     csv_name: str = args.csv_name
     generate_config: bool = args.generate_config
     if generate_config:
-        import rospy
-        rospy.init_node('lmdb_loader')
         print("Generate dataset config")
         generate_dataset_config(dataset_directory, os.path.join(dataset_directory, csv_name))
 

@@ -106,11 +106,67 @@ class FR5:
         self._last_cart_acc_d = np.zeros((self._filter_width, 6))
         print(f'\033[37m[__init__]: Robot initialized. \033[0m')
 
-    def move(self, action, time_t):
+    def move_cart(self, action, time_t):
         self.set_gripper(action[-1])
-        return self.move_servo(action[:6], time_t)
+        return self._move_cart(action[:6], time_t)
 
-    def move_servo(self, joint, time_t):
+    def move_servo(self, action, time_t):
+        self.set_gripper(action[-1])
+        return self._move_servo(action[:6], time_t)
+
+    def _move_cart(self, loc, time_t):
+        try:
+            if self.robot.ResetAllError() != 0:
+                pdb.set_trace()
+                print(f"[move_joint._servo] Cannot clear errors, need to restart")
+                return -1
+
+            desired_loc = [item for item in loc]
+            x, y, z = loc[0], loc[1], loc[2]
+            out_of_workspace = False
+            if not (
+                    self.x_min_soft <= x <= self.x_max_soft and self.y_min_soft <= y <= self.y_max_soft and self.z_min_soft <= z <= self.z_max_soft):
+                desired_loc[0] = max(self.x_min_soft, min(self.x_max_soft, loc[0]))
+                desired_loc[1] = max(self.y_min_soft, min(self.y_max_soft, loc[1]))
+                desired_loc[2] = max(self.z_min_soft, min(self.z_max_soft, loc[2]))
+                out_of_workspace = True
+            joint = self.robot.GetInverseKin(0, [float(i) for i in desired_loc], -1)[1:]
+            gamma = self.gamma if not out_of_workspace else 0.4
+            # start_time = time.time()
+            joint = self._average_joint(joint, time_t, gamma=gamma, clip_vel=self.clip_vel, clip_acc=self.clip_acc)
+            # print(f"{time.time() - start_time}")
+            loc = self.robot.GetForwardKin(joint)[1:]
+            x, y, z = loc[0], loc[1], loc[2]
+
+            # self._last_cart_pos = np.roll(self._last_cart_pos, -1, axis=0)
+            # self._last_cart_pos[-1] = loc
+            # self._last_cart_vel = np.roll(self._last_cart_vel, -1, axis=0)
+            # self._last_cart_vel[-1] = (self._last_cart_pos[-1] - self._last_cart_pos[-2]) / time_t
+            # self._last_cart_acc = np.roll(self._last_cart_acc, -1, axis=0)
+            # self._last_cart_acc[-1] = (self._last_cart_vel[-1] - self._last_cart_vel[-2]) / time_t
+            #
+            # self._last_cart_pos_d = np.roll(self._last_cart_pos_d, -1, axis=0)
+            # self._last_cart_pos_d[-1] = desired_loc
+            # self._last_cart_vel_d = np.roll(self._last_cart_vel_d, -1, axis=0)
+            # self._last_cart_vel_d[-1] = (self._last_cart_pos_d[-1] - self._last_cart_pos[-2]) / time_t
+            # self._last_cart_acc_d = np.roll(self._last_cart_acc_d, -1, axis=0)
+            # self._last_cart_acc_d[-1] = (self._last_cart_vel_d[-1] - self._last_cart_vel[-2]) / time_t
+
+            if not (self.x_min <= x <= self.x_max and self.y_min <= y <= self.y_max and self.z_min <= z <= self.z_max):
+                print(f"[move_joint_servo] Out of workspace! joint \n{joint}, loc \n{loc}.")
+                # pdb.set_trace()
+                self.initialize()
+                return 0
+            ret = self.robot.ServoJ(joint, 0.0, 0.0, time_t, 0.0, 0.0)
+            return ret
+        except Exception as e:
+            print("_last_pos", self._last_pos)
+            print("_last_vel", self._last_vel)
+            traceback.print_exc()
+            print(f"[move_joint_servo] An error occurs: ", e)
+            return 0
+
+    def _move_servo(self, joint, time_t):
         try:
             if self.robot.ResetAllError() != 0:
                 pdb.set_trace()
