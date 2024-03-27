@@ -12,6 +12,8 @@ from edi_gym.edi_env_ros_interface import *
 
 
 class HeartbeatClient:
+    waiting_time = 0.5
+
     def __init__(self, client_identifier="default", heartbeat_interval=2):
         self.heartbeat_interval = heartbeat_interval
         self.client_identifier = client_identifier
@@ -19,12 +21,21 @@ class HeartbeatClient:
         self.heartbeat_thread = threading.Thread(target=self.send_heartbeat)
         # self.heartbeat_thread.daemon = True
         self.heartbeat_thread.start()
+        self.sent = False
 
     def send_heartbeat(self):
         while not rospy.is_shutdown():
             self.publisher.publish(self.client_identifier)
+            self.sent = True
             # rospy.loginfo(f"Heartbeat sent by client {self.client_identifier}")
-            time.sleep(self.heartbeat_interval)
+            rospy.sleep(self.heartbeat_interval)
+
+    def wait_for_ready(self):
+        while not rospy.is_shutdown():
+            if self.sent:
+                return True
+            rospy.loginfo(f"Waiting until the first heartbeat is sent...")
+            rospy.sleep(self.waiting_time)
 
 
 class EdiEnv:
@@ -49,6 +60,7 @@ class EdiEnv:
         start_listening()
         self._wait_until_ready()
         self.reset()
+        self.heartbeat_client.wait_for_ready()
         rospy.loginfo('Initialized EdiEnv.')
 
     def reset(self):

@@ -196,7 +196,7 @@ class rosbagRecorder:
 
 
 class Convertor:
-    def __init__(self, base, fix_save_path=True, delete_bag=True):
+    def __init__(self, base, fix_save_path=True, delete_bag=False):
         self.save_queue = queue.Queue()
         self.base = base
         if not os.path.exists(self.base):

@@ -70,10 +70,19 @@ def load_from_bag(file_name, config=None):
         return None
 
     # Process and pair actions with observations
-    results = []
+    records = []
     env_topics = sensor_topics + [status_topic]
-    topics_iterators = {k: [iter(topics[k]), False] for k in env_topics}
-
+    unsorted_msgs = []
+    for topic in env_topics:
+        try:
+            iterator = iter(topics[topic])
+            while not rospy.is_shutdown():
+                msg, msg_time = next(iterator)
+                unsorted_msgs.append((topic, msg, msg_time))
+        except (KeyError, StopIteration):
+            continue
+    sorted_msgs = sorted(unsorted_msgs, key=lambda x: x[2])
+    iterator = iter(sorted_msgs)
     for i, (action_data, action_time) in enumerate(topics[action_topic]):
         idx = action_data["idx"]
         # start_time = idx_times.get(idx - 1, None)
@@ -87,43 +96,35 @@ def load_from_bag(file_name, config=None):
             "status": None,
             "sensors": {}
         }
-        latest_timestamp = None
         while not rospy.is_shutdown():
-            for topic, (iterator, b) in topics_iterators.items():
-                try:
-                    msg, msg_time = next(iterator)
-                    if msg_time > start_time:
-                        if topic == status_topic:
-                            status = json.loads(msg.data)
-                            observations["status"].append((status, msg_time))
-                        else:
-                            msg: Image
-                            img = bridge.imgmsg_to_cv2(msg, "bgr8")
-                            observations["sensors"][topic].append((img, msg_time))
-                    if all(len(observations["status"]) > 0 and len(observations["sensors"][tp]) > 0 for tp in
-                           observations["sensors"]) and len(observations["sensors"]) > 0:
-                        latest_timestamp = msg_time
-                        break
-                except StopIteration:
-                    topics_iterators[topic][1] = True
-                except:
-                    traceback.print_exc()
-            if all(len(observations["status"]) > 0 and len(observations["sensors"][tp]) > 0 for tp in
-                   observations["sensors"]) and len(observations["sensors"]) > 0:
-                messages = observations["status"]
-                messages = [(m, timestamp) for m, timestamp in messages if timestamp <= latest_timestamp]
-                m, timestamp = messages[-1]
-                obs["status"] = m
-                for k, messages in observations["sensors"].items():
+            try:
+                topic, msg, msg_time = next(iterator)
+                if msg_time > start_time:
+                    if topic == status_topic:
+                        status = json.loads(msg.data)
+                        observations["status"].append((status, msg_time))
+                    else:
+                        msg: Image
+                        img = bridge.imgmsg_to_cv2(msg, "bgr8")
+                        observations["sensors"][topic].append((img, msg_time))
+                if all(len(observations["status"]) > 0 and len(observations["sensors"][tp]) > 0 for tp in
+                       observations["sensors"]) and len(observations["sensors"]) > 0:
+                    latest_timestamp = msg_time
+                    messages = observations["status"]
                     messages = [(m, timestamp) for m, timestamp in messages if timestamp <= latest_timestamp]
                     m, timestamp = messages[-1]
-                    obs["sensors"][k] = m
+                    obs["status"] = m
+                    for k, messages in observations["sensors"].items():
+                        messages = [(m, timestamp) for m, timestamp in messages if timestamp <= latest_timestamp]
+                        m, timestamp = messages[-1]
+                        obs["sensors"][k] = m
+                    break
+            except StopIteration:
                 break
+            except:
+                traceback.print_exc()
 
-            if all(b for _, b in topics_iterators.values()):
-                break
-
-        results.append({
+        records.append({
             "idx": idx,
             "action": action_data["action"],
             "obs": obs,
@@ -131,15 +132,15 @@ def load_from_bag(file_name, config=None):
             "action_timestamp": action_data["timestamp"],
             "action_mode": action_data["mode"],
         })
-    if len(results) <= 2:
+    if len(records) <= 2:
+        pdb.set_trace()
         rospy.logerr(f"[loader] Failed to process {params_file_name}, len is {len(results)}...")
         return None
-    base_timestamp = results[0]["action_timestamp"]
-    del results[0]
-    del results[-1]
+    base_timestamp = records[0]["action_timestamp"]
+    del records[0]
+    del records[-1]
 
-    for step, item in enumerate(results):
-        idx = item["idx"]
+    for step, item in enumerate(records):
         item["step"] = step
         del item["idx"]
 
@@ -147,10 +148,9 @@ def load_from_bag(file_name, config=None):
     instruct_param = "/env/info/instruct"
     if instruct_param in params:
         instruct = params[instruct_param]
-
-    duration = float(results[-1]["action_timestamp"]) - float(results[0]["obs_timestamp"])
-    results = {"base_timestamp": base_timestamp, "records": results, "duration": duration,
-               "max_step": len(results), "instruct": instruct, "params": params}
+    duration = float(records[-1]["action_timestamp"]) - float(records[0]["obs_timestamp"])
+    results = {"base_timestamp": base_timestamp, "records": records, "duration": duration,
+               "max_step": len(records), "instruct": instruct, "params": params}
     results.update(config)
     return results
 
