@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import numpy as np
 import torch
@@ -100,6 +101,7 @@ class SuitableStepLMDBDatasetV2(StepLMDBDatasetV2):
     def __getitem__(self, index):
         obs, action, instruct = super().__getitem__(index)
         obs["status"] = np.array(obs["status"]["jt_cur_pos"][0])
+        instruct = json.loads(instruct)
         return obs, action, instruct
 
 

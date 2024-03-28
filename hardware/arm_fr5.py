@@ -88,7 +88,13 @@ class FR5:
         gripper_length = 13.0
         default_pose = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         gripper_pose = [0.0, 0.0, float(gripper_length), 0.0, 0.0, 0.0]
-        self.robot.ResetAllError()
+        while True:
+            try:
+                self.robot.ResetAllError()
+                break
+            except:
+                print("Attempting to reconnect...")
+                time.sleep(5)
         self.robot.SetToolCoord(0, default_pose, 0, 0)
         self.robot.SetToolCoord(1, gripper_pose, 0, 0)
         self.move_end([600, 0, 300, -180, 0, 90])
@@ -105,6 +111,10 @@ class FR5:
         self._last_cart_acc = np.zeros((self._filter_width, 6))
         self._last_cart_acc_d = np.zeros((self._filter_width, 6))
         print(f'\033[37m[__init__]: Robot initialized. \033[0m')
+
+    def reset(self, config=None):
+        self.initialize()
+        return 0
 
     def move_cart(self, action, time_t):
         self.set_gripper(action[-1])
@@ -219,6 +229,7 @@ class FR5:
             print("_last_vel", self._last_vel)
             traceback.print_exc()
             print(f"[move_joint_servo] An error occurs: ", e)
+            self.initialize()
             return 0
 
     def reconnect(self):

@@ -404,6 +404,7 @@ class ActionLoopRobotArmBackend(RobotArmBackend):
         return err
 
     def reset(self):
+        self.robot.reset()
         return 0
 
 

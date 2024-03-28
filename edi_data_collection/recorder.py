@@ -10,18 +10,20 @@ import threading
 import time
 import sys
 import traceback
-import rospy
 import psutil
+
+sys.path.append(".")
+import rospy
 from std_msgs.msg import Int8, String
 from std_srvs.srv import Trigger, TriggerResponse, TriggerRequest
 from edi_data_collection.bag_loader import record
-
-sys.path.append(".")
 
 rospy.init_node('record_bags')
 rospy.loginfo(f"[record] Initialize records node.")
 
 bag_save_base = f"dataset/bag"
+datetime_start = datetime.datetime.now()
+datetime_start = datetime_start.strftime("%Y%m%d_%H%M%S")
 lmdb_save_base = f"dataset/train_lmdb"
 lmdb_save_path_is_fixed = True
 
@@ -89,7 +91,7 @@ class Record:
 
 
 class rosbagRecorder:
-    i = 1
+    i = 0
 
     def __init__(self, base):
 
@@ -151,6 +153,8 @@ class rosbagRecorder:
                 self.mutex.release()
                 return TriggerResponse(success=False,
                                        message="Did not receive status or heartbeat, can not start recording.")
+            self.i += 1
+
             bag_name = f'all_topics.bag'
             now = datetime.datetime.now()
             now = now.strftime("%Y%m%d_%H%M%S")

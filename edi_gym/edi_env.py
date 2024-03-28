@@ -37,6 +37,13 @@ class HeartbeatClient:
             rospy.loginfo(f"Waiting until the first heartbeat is sent...")
             rospy.sleep(self.waiting_time)
 
+    def stop(self):
+        self.heartbeat_thread.terminate()
+        if self.heartbeat_thread.is_alive():
+            self.heartbeat_thread.join()  # Wait for the thread to finish
+
+
+
 
 class EdiEnv:
     demo = False
@@ -117,7 +124,9 @@ class EdiEnv:
         return obs, reward, done, info
 
     def close(self):
-        pass
+        self.heartbeat_client.stop()
+        # Signal ROS shutdown (this stops the ROS node started with rospy.init_node)
+        rospy.signal_shutdown('Closing environment')
 
     def _obtain_obs_latest(self) -> (Dict, Dict):
         status, images = obtain_obs_latest()

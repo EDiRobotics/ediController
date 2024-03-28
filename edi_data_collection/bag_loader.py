@@ -35,8 +35,10 @@ def load_from_bag(file_name, config=None):
                 params = json.load(f)
         except:
             rospy.logwarn(f"[loader] Error decoding {params_file_name}, use default...")
+    bag_duration = 0
     try:
         bag = rosbag.Bag(file_name)
+        bag_duration = bag.get_end_time() - bag.get_start_time()
         # Define topics of interest
         status_topic = "/arm_status/all"
         sensor_topics = [topic for topic, _ in bag.get_type_and_topic_info()[1].items() if topic.startswith("/sensor/")]
@@ -133,8 +135,8 @@ def load_from_bag(file_name, config=None):
             "action_mode": action_data["mode"],
         })
     if len(records) <= 2:
-        pdb.set_trace()
-        rospy.logerr(f"[loader] Failed to process {params_file_name}, len is {len(results)}...")
+        rospy.logerr(
+            f"[loader] Failed to process {params_file_name}, duration is {bag_duration}, len is {len(records)}...")
         return None
     base_timestamp = records[0]["action_timestamp"]
     del records[0]
@@ -248,18 +250,19 @@ if __name__ == "__main__":
     file_list = find_files_with_extension(file_dir, extension)
     all_results = []
     for file_path in file_list:
-        with open(os.path.join(os.path.dirname(file_path), "meta.json"), 'r') as file:
-            d = json.load(file)
-            episode = d["episode"]
-        lmdb_save_path = f"dataset/train_{episode}_lmdb"
+        # with open(os.path.join(os.path.dirname(file_path), "meta.json"), 'r') as file:
+        #     d = json.load(file)
+        #     episode = d["episode"]
+        lmdb_save_path = f"dataset/train_lmdb/all"
         # lmdb_save_path = f"dataset/train_nav_lmdb"
-        all_results += record(file_path, lmdb_save_path=lmdb_save_path, cover_exist=True)
+        record(file_path, lmdb_save_path=lmdb_save_path, cover_exist=True)
+        # all_results += record(file_path, lmdb_save_path=lmdb_save_path, cover_exist=True)
 
-    rospy.loginfo(f"----- Starting to replay -----")
-    from edi_data_collection.replay import display_sensor_data
-
-    for i, (full_file_name, results) in enumerate(all_results):
-        rospy.loginfo(f"Start to replay {full_file_name}...")
-        display_sensor_data(results, display_image=display_image, display_action=display_action)
+    # rospy.loginfo(f"----- Starting to replay -----")
+    # from edi_data_collection.replay import display_sensor_data
+    #
+    # for i, (full_file_name, results) in enumerate(all_results):
+    #     rospy.loginfo(f"Start to replay {full_file_name}...")
+    #     display_sensor_data(results, display_image=display_image, display_action=display_action)
 
     # rospy.loginfo(f"Finish all replay tasks...")
