@@ -43,7 +43,7 @@ class BehaviorCloningModel(nn.Module):
 
 def evaluate(model, env, max_step=500):
     input("Press any key to continue evaluate...")
-    # 780,-160,220
+    # 750,-160,300
     if goal_type == "cart":
         cart_coordinates = input("Enter cart coordinates (e.g., '780,-160,220'): ")
         coordinates_list = cart_coordinates.split(',')
@@ -53,7 +53,10 @@ def evaluate(model, env, max_step=500):
         raise NotImplementedError
 
     model.eval()
+    print("start reset")
     obs = env.reset()
+    print("end reset")
+
     sensor_data = obs["sensors"]
     obs["status"] = np.array(obs["status"]["jt_cur_pos"][0])
     obs_images = torch.tensor(list(obs["sensors"].values())[0]).float()
@@ -93,7 +96,7 @@ evaluate_only = True
 evaluate_num = 5
 max_epochs = 10
 used_scale = 1.0
-learning_rate = 1e-2
+learning_rate = 3e-3
 batch_size = 128
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Running on {device}")

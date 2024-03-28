@@ -338,13 +338,14 @@ class ArmControlThread(threading.Thread):
         self.control_time = None
         self.heartbeat_thread = heartbeat_thread
         self.err = 0
+        self._stop_event = threading.Event()
 
     def run(self):
         call_count = 0
         loop_count = 0
         start_time = time.time()
         self.control_time = rospy.Time.now()
-        while not rospy.is_shutdown():
+        while not rospy.is_shutdown() and not self._stop_event.is_set():
             loop_count += 1
             elapsed_time = time.time() - start_time
             if elapsed_time >= 20:  # Check if 60 seconds have passed
@@ -375,6 +376,9 @@ class ArmControlThread(threading.Thread):
                     self.heartbeat_thread.stop_publishing()
                 self.err = err
 
+    def stop(self):
+        self._stop_event.set()
+
     def get_error(self):
         return self.err
 
@@ -404,9 +408,12 @@ class ActionLoopRobotArmBackend(RobotArmBackend):
         return err
 
     def reset(self):
-        self.robot.reset()
+        # self.robot.reset()
+        # self.control_thread.stop()
+        # self.traj_server = TrajectoryServer(self.control_freq)
+        # self.control_thread = ArmControlThread(self.robot, self.traj_server, self.control_freq, self.heartbeat_thread)
+        # self.control_thread.start()
         return 0
-
 
 
 idx = 0

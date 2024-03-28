@@ -11,7 +11,7 @@ echo "Set ROS_HOSTNAME=${ROS_HOSTNAME}, ROS_MASTER_URI=${ROS_MASTER_URI}..."
 echo "Starting roscore..."
 roscore &
 
-sleep 3
+sleep 1
 camera_numbers=$(ls /dev/video* | sed 's/[^0-9]*//g')
 echo "Starting to obtain camera images, cameras $(echo $camera_numbers | tr '\n' ' ') are detected..."
 for camera_number in $camera_numbers
@@ -22,10 +22,13 @@ done
 echo "Starting to obtain arm status..."
 /usr/bin/python3 hardware/get_status.py &
 
-echo "Starting Sim Environment..."
-python hardware/simulator.py &
+#echo "Starting recording progress..."
+#/usr/bin/python3 edi_data_collection/recorder.py &
 
-echo "Starting Real Environment Backend..."
-python hardware/fr5_backend.py &
+#echo "Starting Sim Environment..."
+#python hardware/simulator.py &
+
+#echo "Starting Real Environment Backend..."
+#python hardware/fr5_backend.py &
 
 wait
